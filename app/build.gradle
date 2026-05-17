@@ -11,7 +11,7 @@ android {
         minSdk 16          // Android 4.1.2 / OUYA
         targetSdk 28       // keeps legacy storage behaviour friendlier for old sideload devices
         versionCode 1
-        versionName '1.0'
+        versionName '1.1.0'
 
         ndk {
             abiFilters 'armeabi-v7a'
@@ -21,7 +21,12 @@ android {
             cmake {
                 abiFilters 'armeabi-v7a'
                 cppFlags '-std=c++17 -fexceptions -frtti -fsigned-char -DANDROID -DPLATFORM_ANDROID'
-                arguments '-DANDROID_STL=c++_shared',
+                // UT99_ANDROID_V78_OUYA_STATIC_STL_FIX:
+                // Android 4.1.2 / OUYA failed to resolve the transitive
+                // libc++_shared.so dependency while loading libut99dc_android_bridge.so.
+                // Link the small bridge and UE entry libraries against the static
+                // C++ runtime so no external libc++_shared.so is required at startup.
+                arguments '-DANDROID_STL=c++_static',
                         '-DANDROID_ARM_MODE=arm',
                         '-DANDROID_ARM_NEON=FALSE'
             }

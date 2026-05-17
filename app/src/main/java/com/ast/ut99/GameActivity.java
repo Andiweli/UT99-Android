@@ -22,14 +22,57 @@ import java.io.File;
 public class GameActivity extends SDLActivity {
     private static final String TAG = "UT99Android";
 
+    // UT99_ANDROID_V76_KEYBOARD_START_SAFE:
+    // The SDL dummy text view must not summon the IME during engine start.
+    // Native UWindow code toggles this flag only when an actual edit-field candidate is tapped.
+    private static volatile boolean sUt99ImeWanted;
+
+    public static void ut99SetImeWanted(boolean wanted) {
+        sUt99ImeWanted = wanted;
+    }
+
+    public static boolean ut99IsImeWanted() {
+        return sUt99ImeWanted;
+    }
+
+    public static boolean ut99CommitImeText(String text) {
+        // UT99_ANDROID_V82_IME_COMMIT_BRIDGE:
+        // Some Android/SDL combinations show the DummyEdit keyboard correctly but
+        // never deliver SDL_TEXTINPUT to the game.  SDLActivity forwards committed
+        // IME text here; native code queues it and commits it to UWindow KeyType
+        // on the SDL/game thread.
+        if (!sUt99ImeWanted || text == null || text.length() == 0) {
+            return false;
+        }
+        try {
+            nativeAndroidTextV82(text);
+            Log.i(TAG, "v82 committed IME text through GameActivity bridge len=" + text.length());
+            return true;
+        } catch (Throwable t) {
+            Log.w(TAG, "v82 IME bridge unavailable, falling back to SDL text path", t);
+            return false;
+        }
+    }
+
+    private static boolean bridgeLoaded;
+    private static Throwable bridgeLoadError;
+
     static {
-        System.loadLibrary("ut99dc_android_bridge");
+        try {
+            System.loadLibrary("ut99dc_android_bridge");
+            bridgeLoaded = true;
+        } catch (Throwable t) {
+            bridgeLoaded = false;
+            bridgeLoadError = t;
+        }
     }
 
     private static native boolean nativePrepareProcess(String dataRoot, String homeDir);
+    private static native void nativeAndroidTextV82(String text);
 
     private File dataRoot;
     private File homeDir;
+    private boolean legacySafeMode;
 
     private File resolveDataRootForGame() {
         String fromIntent = getIntent() != null ? getIntent().getStringExtra(UT99Paths.EXTRA_DATA_ROOT) : null;
@@ -48,12 +91,45 @@ public class GameActivity extends SDLActivity {
     protected void onCreate(Bundle savedInstanceState) {
         dataRoot = resolveDataRootForGame();
         homeDir = UT99Paths.homeDir(this);
+        legacySafeMode = resolveLegacySafeMode();
 
         applyUt99ImmersiveMode();
+        sUt99ImeWanted = false;
+        ut99V76HideImeUnlessRequested();
 
+        if (!bridgeLoaded) {
+            // UT99_ANDROID_V78_OUYA_STATIC_STL_FIX:
+            // On Android 4.1.2 the bridge can fail before SDL starts if a
+            // transitive native dependency is missing.  Always call through to
+            // Activity.onCreate via SDLActivity before finishing, otherwise old
+            // Android reports a misleading SuperNotCalledException and hides the
+            // real native-load error.
+            Log.e(TAG, "Android bridge library failed to load", bridgeLoadError);
+            Toast.makeText(this, "UT99 bridge load failed: " +
+                    (bridgeLoadError != null ? bridgeLoadError.getMessage() : "unknown"), Toast.LENGTH_LONG).show();
+            try {
+                super.onCreate(savedInstanceState);
+            } catch (Throwable superError) {
+                Log.e(TAG, "SDLActivity fallback onCreate after bridge failure also failed", superError);
+            }
+            finish();
+            return;
+        }
+
+        boolean androidIniCreatedV86 = false;
         try {
-            UT99Paths.ensureAndroidIni(dataRoot);
-            Log.i(TAG, "Android UT99 ini prepared below " + dataRoot.getAbsolutePath());
+            UT99Paths.normalizeInstalledDataRoot(dataRoot);
+            UT99Paths.rememberDataRoot(this, dataRoot);
+            UT99Paths.ensureBundledSystemPatches(this, dataRoot);
+            androidIniCreatedV86 = UT99Paths.ensureAndroidIni(dataRoot);
+            if (legacySafeMode && androidIniCreatedV86) {
+                applyLegacyOuyaSafeIni(dataRoot);
+            } else if (legacySafeMode) {
+                Log.i(TAG, "UT99_ANDROID_V86_CONFIG_PRESERVE: keeping existing OUYA audio/settings config");
+            }
+            Log.i(TAG, "Android UT99 ini prepared below " + dataRoot.getAbsolutePath()
+                    + " legacySafe=" + legacySafeMode
+                    + " createdDefaults=" + androidIniCreatedV86);
         } catch (Exception e) {
             Log.e(TAG, "Failed to prepare Android UT99 ini", e);
             Toast.makeText(this, "UT99 ini setup failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
@@ -66,9 +142,17 @@ public class GameActivity extends SDLActivity {
         }
 
         android.util.Log.i("UT99Android", "UT99_ANDROID_V63_CITYINTRO_AUDIO_SAFE_START direct CityIntro.unr startup");
-        applyUt99V36UWindowConfig();
-        applyUt99V40UiSafeInputConfig();
-        applyUt99V45SafeAreaLookLogoConfig();
+        if (androidIniCreatedV86) {
+            // UT99_ANDROID_V86_CONFIG_PRESERVE:
+            // Apply generated Android defaults only when the Android INI files were
+            // just created.  Older builds appended these defaults on every launch,
+            // which made UI changes appear to vanish after restart.
+            applyUt99V36UWindowConfig();
+            applyUt99V40UiSafeInputConfig();
+            applyUt99V45SafeAreaLookLogoConfig();
+        } else {
+            android.util.Log.i("UT99Android", "UT99_ANDROID_V86_CONFIG_PRESERVE keeping existing AndroidUT99.ini/AndroidUser.ini");
+        }
         super.onCreate(savedInstanceState);
         ut99V55ScheduleFixedSurface(); // v55 onCreate
         ut99V52ScheduleImmersive(); // v52 onCreate
@@ -78,6 +162,98 @@ public class GameActivity extends SDLActivity {
         ut99V50Immersive(); // v50 onCreate
         stageBrandingAssetV47();
         applyUt99ImmersiveMode();
+    }
+
+
+    @Override
+    protected void onNewIntent(android.content.Intent intent) {
+        // UT99_ANDROID_V87_RELIABLE_RELAUNCH:
+        // GameActivity should normally be launched as a fresh standard Activity.
+        // This is a safety net for devices/old installs that still deliver a
+        // new intent to an existing SDL Activity instance.  Close it instead of
+        // trying to run SDL_main twice in the same Java/native state.
+        super.onNewIntent(intent);
+        setIntent(intent);
+        Log.w(TAG, "v87 stale GameActivity received new launch intent; finishing for clean restart");
+        try {
+            finish();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        final boolean finishing = isFinishing();
+        super.onDestroy();
+
+        // UT99_ANDROID_V87_RELIABLE_RELAUNCH:
+        // The engine runs in its own :game process.  Some devices keep that
+        // process alive after SDLActivity/SDL_main exits, which leaves stale
+        // native state behind.  The next launcher tap can then revive the old
+        // process instead of starting the engine cleanly.  Kill only the :game
+        // process, never the installer/main process.
+        if (finishing || !isChangingConfigurations()) {
+            try {
+                Log.i(TAG, "v87 GameActivity destroyed; scheduling clean :game process exit finishing=" + finishing);
+                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(new Runnable() {
+                    @Override public void run() {
+                        try {
+                            android.os.Process.killProcess(android.os.Process.myPid());
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                }, 180L);
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private boolean isLegacyOuyaLikeDevice() {
+        if (android.os.Build.VERSION.SDK_INT <= 17) return true;
+        String model = String.valueOf(android.os.Build.MODEL).toLowerCase(java.util.Locale.US);
+        String manufacturer = String.valueOf(android.os.Build.MANUFACTURER).toLowerCase(java.util.Locale.US);
+        String product = String.valueOf(android.os.Build.PRODUCT).toLowerCase(java.util.Locale.US);
+        return model.contains("ouya") || manufacturer.contains("ouya") || product.contains("ouya");
+    }
+
+    private boolean resolveLegacySafeMode() {
+        boolean fromIntent = getIntent() != null &&
+                getIntent().getBooleanExtra(UT99Paths.EXTRA_LEGACY_SAFE_MODE, false);
+        if (fromIntent) return true;
+        return isLegacyOuyaLikeDevice();
+    }
+
+    private void applyLegacyOuyaSafeIni(java.io.File root) throws java.io.IOException {
+        // UT99_ANDROID_V79_OUYA_AUDIO_REENABLE:
+        // v78 proved the static STL start path is stable on OUYA. Do not disable
+        // audio anymore; keep only conservative GenericAudio settings suitable for
+        // Android 4.1 / SDL AudioTrack.
+        if (root == null) return;
+        java.io.File systemDir = new java.io.File(root, "System");
+        if (!systemDir.exists() && !systemDir.mkdirs()) {
+            throw new java.io.IOException("Cannot create System folder: " + systemDir.getAbsolutePath());
+        }
+        java.io.File ini = new java.io.File(systemDir, "AndroidUT99.ini");
+        java.io.FileWriter fw = new java.io.FileWriter(ini, true);
+        try {
+            fw.write("\n; UT99_ANDROID_V79_OUYA_AUDIO_REENABLE\n");
+            fw.write("[Engine.Engine]\n");
+            fw.write("AudioDevice=Audio.GenericAudioSubsystem\n");
+            fw.write("[Engine.GameEngine]\n");
+            fw.write("UseSound=True\n");
+            fw.write("[Audio.GenericAudioSubsystem]\n");
+            fw.write("UseDigitalMusic=True\n");
+            fw.write("UseStereo=True\n");
+            fw.write("Use3dHardware=False\n");
+            fw.write("UseSpatial=False\n");
+            fw.write("UseReverb=False\n");
+            fw.write("Latency=20\n");
+            fw.write("Channels=8\n");
+            fw.write("OutputRate=22050Hz\n");
+        } finally {
+            fw.close();
+        }
+        Log.i(TAG, "OUYA/Android4 compatibility mode: audio enabled with conservative GenericAudio settings");
     }
 
     /**
@@ -99,8 +275,10 @@ public class GameActivity extends SDLActivity {
                 WindowManager.LayoutParams.FLAG_FULLSCREEN);
         window.setFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON,
                 WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
-                | WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING);
+        // UT99_ANDROID_V76_KEYBOARD_START_SAFE:
+        // Keep the IME hidden during normal engine/game startup. Native UWindow
+        // edit-field handling explicitly requests it when text input is wanted.
+        window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_NOTHING | WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN);
 
         View decor = window.getDecorView();
         if (decor != null) {
@@ -111,6 +289,21 @@ public class GameActivity extends SDLActivity {
                             | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
                             | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
                             | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+        }
+    }
+
+    private void ut99V76HideImeUnlessRequested() {
+        if (sUt99ImeWanted) {
+            return;
+        }
+        try {
+            android.view.View view = getWindow() != null ? getWindow().getDecorView() : null;
+            android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager)getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
+            if (view != null && imm != null) {
+                imm.hideSoftInputFromWindow(view.getWindowToken(), 0);
+            }
+        } catch (Throwable ignored) {
         }
     }
 
@@ -141,6 +334,7 @@ public class GameActivity extends SDLActivity {
         super.onWindowFocusChanged(hasFocus);
         if (hasFocus) {
             applyUt99ImmersiveMode();
+            ut99V76HideImeUnlessRequested();
         }
     }
 
@@ -256,6 +450,17 @@ public class GameActivity extends SDLActivity {
                 "A=StrafeLeft\n" +
                 "D=StrafeRight\n" +
                 "Space=Jump\n" +
+                "C=Duck\n" +
+                "Shift=Walking\n" +
+                "Q=PrevWeapon\n" +
+                "N=NextWeapon\n" +
+                "X=Taunt Wave\n" +
+                "Joy1=Jump\n" +
+                "Joy2=Duck\n" +
+                "Joy3=Taunt Wave\n" +
+                "Joy4=Walking\n" +
+                "Joy10=PrevWeapon\n" +
+                "Joy11=NextWeapon\n" +
                 "LeftMouse=Fire\n" +
                 "RightMouse=AltFire\n" +
                 "MouseX=Axis aMouseX Speed=1.0\n" +
@@ -368,6 +573,12 @@ public class GameActivity extends SDLActivity {
                 || ((source & android.view.InputDevice.SOURCE_DPAD) == android.view.InputDevice.SOURCE_DPAD);
     }
 
+    private static boolean isOuyaMenuKeyV79(int keyCode) {
+        // OUYA's center/system button is reported as KEYCODE_MENU on Android 4.1.2.
+        return keyCode == android.view.KeyEvent.KEYCODE_MENU
+                || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_MODE;
+    }
+
     private float applyDeadzoneV47(float value, float deadzone) {
         return Math.abs(value) >= deadzone ? value : 0.0f;
     }
@@ -406,12 +617,14 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchKeyEvent(android.view.KeyEvent event) {
-        if (isAndroidGamepadSourceV47(event)) {
-            final int action = event.getAction();
-            final int keyCode = event.getKeyCode();
+        final int action = event.getAction();
+        final int keyCode = event.getKeyCode();
+        boolean textDeleteKey = keyCode == android.view.KeyEvent.KEYCODE_DEL
+                || keyCode == android.view.KeyEvent.KEYCODE_FORWARD_DEL;
+        if (isAndroidGamepadSourceV47(event) || isOuyaMenuKeyV79(keyCode) || textDeleteKey) {
             if (action == android.view.KeyEvent.ACTION_DOWN || action == android.view.KeyEvent.ACTION_UP) {
                 nativeAndroidButtonV47(keyCode, action == android.view.KeyEvent.ACTION_DOWN);
-                android.util.Log.i("UT99Android", "v47 android key code=" + keyCode + " down=" + (action == android.view.KeyEvent.ACTION_DOWN));
+                android.util.Log.i("UT99Android", "v80 android key code=" + keyCode + " down=" + (action == android.view.KeyEvent.ACTION_DOWN));
                 return true;
             }
         }
@@ -453,11 +666,10 @@ public class GameActivity extends SDLActivity {
                 flags |= android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
             }
             decor.setSystemUiVisibility(flags);
-            android.view.inputmethod.InputMethodManager imm =
-                    (android.view.inputmethod.InputMethodManager)getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                imm.hideSoftInputFromWindow(decor.getWindowToken(), 0);
-            }
+            // UT99_ANDROID_V72_UI_EDIT_FOCUS_KEYBOARD:
+            // Do not hide the IME from immersive re-apply. SDL_StopTextInput()
+            // is now responsible for closing it when the user taps outside an
+            // edit field.
             android.util.Log.i("UT99Android", "UT99_ANDROID_V50_IMMERSIVE");
         } catch (Throwable t) {
             android.util.Log.e("UT99Android", "v50 immersive failed", t);
@@ -524,11 +736,9 @@ public class GameActivity extends SDLActivity {
                 } catch (Throwable ignored) {}
             }
 
-            try {
-                android.view.inputmethod.InputMethodManager imm =
-                        (android.view.inputmethod.InputMethodManager)getSystemService(android.content.Context.INPUT_METHOD_SERVICE);
-                if (imm != null) imm.hideSoftInputFromWindow(decor.getWindowToken(), 0);
-            } catch (Throwable ignored) {}
+            // UT99_ANDROID_V76_KEYBOARD_START_SAFE:
+            // Keep the soft keyboard alive only while native UWindow edit handling requested it.
+            ut99V76HideImeUnlessRequested();
 
             if (java.lang.System.currentTimeMillis() % 1000 < 40) if (java.lang.System.currentTimeMillis() % 1000 < 40) android.util.Log.i("UT99Android", "UT99_ANDROID_V52_IMMERSIVE_HARD"); /* UT99_ANDROID_V54_REDUCE_IMMERSIVE_LOG_SPAM */ /* UT99_ANDROID_V54_REDUCE_IMMERSIVE_LOG_SPAM */
         } catch (Throwable t) {
@@ -608,6 +818,7 @@ public class GameActivity extends SDLActivity {
         ut99V55ScheduleFixedSurface(); // v55 onResume
         super.onResume();
         ut99V52ScheduleImmersive(); // v52 onResume
+        ut99V76HideImeUnlessRequested();
     }
 
 

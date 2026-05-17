@@ -1,0 +1,8 @@
+Place your rebuilt UMenu.u next to this file before building the APK:
+
+app/src/main/assets/ut99_patches/System/UMenu.u
+
+At app launch UT99Paths.ensureBundledSystemPatches() copies it to:
+Android/data/com.ast.ut99/files/UT99/System/UMenu.u
+
+The placeholder .txt is safe to keep or delete. It is not used by the game.
