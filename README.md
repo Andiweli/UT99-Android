@@ -7,7 +7,7 @@
 ![Engine](https://img.shields.io/badge/engine-Unreal%20Engine%201-blue)
 ![Renderer](https://img.shields.io/badge/renderer-OpenGL%20ES%202.0-lightgrey)
 ![ABI](https://img.shields.io/badge/ABI-armeabi--v7a-orange)
-![Controller](https://img.shields.io/badge/controller-supported-blueviolet)
+![Controller](https://img.shields.io/badge/controls-only%20Controller-blueviolet)
 
 **Unreal Tournament Android** is an Android port of **Unreal Tournament / UT99 (1999)** based on the classic **Unreal Engine 1** source code.
 
