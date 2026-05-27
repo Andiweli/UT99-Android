@@ -181,8 +181,12 @@ Special thanks to the Unreal Engine 1 preservation and porting community.
 ## ◈ Legal
 
 Unreal Tournament, Unreal Engine and related names, assets and trademarks are property of Epic Games.
+Portions of the materials used are trademarks and/or copyrighted works of Epic Games, Inc.
 
 This repository does **not** include commercial game data.  
 You must own a legal copy of Unreal Tournament / UT99 to use this port.
+This material is not official and is not endorsed by Epic.
+
+All rights reserved by Epic.
 
 Do not use this project for commercial purposes.
