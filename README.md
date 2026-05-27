@@ -21,12 +21,10 @@
 > [!NOTE]
 > Unofficial fan port.
 > No game data included.
-> Requires legally obtained Unreal Tournament game files.
+> Requires legally obtained Unreal Tournament v1.400 game files.
 > This project is not official and is not endorsed by Epic Games.
 
 > [!IMPORTANT]
-> **Original UT99 game data is not included. You need valid Unreal Tournament v400 data.**
-> 
 > **This app is 32 bit only!** It won't install on your phone? Then it might only accept 64 bit apps. 
 > There are no plans on making this app compatible with 64 bit only CPUs. 
 > 
