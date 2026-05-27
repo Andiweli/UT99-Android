@@ -24,6 +24,9 @@ The goal of this project is to make the original Unreal Tournament playable on A
 > [!IMPORTANT]
 > **Original UT99 game data is not included. You need valid Unreal Tournament v400 data.**
 > 
+> **This app is 32 bit only!** It won't install on your phone? Then it might only accept 64 bit apps. 
+> There are no plans on making this app compatible with 64 bit only CPUs. 
+> 
 > Video games on smartphones are great, but not user-friendly if they require more than two thumbs to control. For this reason, this port is designed for controller input and does not support touchscreen controls.
 >
 > This project is for preservation, experimentation and personal use only.  
