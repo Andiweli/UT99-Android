@@ -11,11 +11,12 @@
   <a href="https://github.com/Andiweli/UT99-Android/releases">DOWNLOAD</a>
 </p>
 
-![Platform](https://img.shields.io/badge/platform-Android-green)
-![Engine](https://img.shields.io/badge/engine-Unreal%20Engine%201-blue)
-![Renderer](https://img.shields.io/badge/renderer-OpenGL%20ES%202.0-lightgrey)
+![Android 13](https://img.shields.io/badge/up%20to-Android%2013-green)
 ![ABI](https://img.shields.io/badge/ABI-armeabi--v7a-orange)
-![Controller](https://img.shields.io/badge/controls-only%20Controller-blueviolet)
+![Engine](https://img.shields.io/badge/engine-Unreal%20Engine%201-blue)
+![Controller](https://img.shields.io/badge/controls-Touch/Controller-blueviolet)
+![Multiplayer](https://img.shields.io/badge/multiplayer-local%20WiFi-blueviolet)
+
 
 **Unreal Tournament Android** is an Android port of **Unreal Tournament / UT99 (1999)** based on the classic **Unreal Engine 1** source code.
 
