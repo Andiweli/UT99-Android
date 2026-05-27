@@ -46,19 +46,13 @@ The goal of this project is to make the original Unreal Tournament playable on A
 
 ## ◈ Features
 
-- Runs Unreal Tournament / UT99 on Android.
-- Supports modern Android devices and older Android hardware.
-- OUYA-compatible launcher entry.
-- Android-side installer / preflight screen.
-- Import game data from:
-  - an extracted Unreal Tournament folder
-  - a ZIP file containing the game data
-- Automatic copy/extraction into the app's private data folder.
-- OpenGL ES 2.0 rendering.
-- SDL2 based native runtime.
-- Controller-friendly default layout.
-- Landscape fullscreen presentation.
-- Legacy storage behavior kept friendly for old sideload devices.
+- Android support for newer Android devices up to Android 13 (no 64 bit devices).
+- OUYA (Android 4.x) legacy support - with a lower internal render resolution for better performance on legacy hardware.
+- Improved Game Data Import – Unreal Tournament data can be imported via folder or ZIP selection and automatically installs to the app's data folder.
+- Android 8+ Storage Access Fixed – SAF support added for modern Android versions where direct SD/file access is restricted.
+- Legacy storage behavior friendly for old sideload devices (place game data on your microSD/UT99 folder).
+- Local WiFi multiplayer and botmatches are available.
+- Added touch controls for use without a controller.
 
 > [!NOTE]
 > Expect occasional issues, especially on very old Android devices or unusual controller mappings.
