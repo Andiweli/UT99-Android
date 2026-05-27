@@ -18,9 +18,11 @@
 ![Multiplayer](https://img.shields.io/badge/multiplayer-local%20WiFi-blueviolet)
 
 
-**Unreal Tournament Android** is an Android port of **Unreal Tournament / UT99 (1999)** based on the classic **Unreal Engine 1** source code.
-
-The goal of this project is to make the original Unreal Tournament playable on Android devices, including legacy Android hardware such as the **OUYA console**, while preserving the classic look and feel of the PC version.
+> [!NOTE]
+> Unofficial fan port.
+> No game data included.
+> Requires legally obtained Unreal Tournament game files.
+> This project is not official and is not endorsed by Epic Games.
 
 > [!IMPORTANT]
 > **Original UT99 game data is not included. You need valid Unreal Tournament v400 data.**
