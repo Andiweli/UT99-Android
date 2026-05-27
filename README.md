@@ -178,7 +178,7 @@ Special thanks to the Unreal Engine 1 preservation and porting community.
 
 ---
 
-## ◈ Legal
+## ◎ Legal
 
 Unreal Tournament, Unreal Engine and related names, assets and trademarks are property of Epic Games.
 Portions of the materials used are trademarks and/or copyrighted works of Epic Games, Inc.
