@@ -19,9 +19,10 @@
 - [x] Android gamepad support
 - [x] OUYA controller support
 - [x] Add Android mouse support
+- [ ] Fix Keyboard input
 
 ## Future/Uncertain Expansions
 
-- [ ] Touchscreen overlay
-- [ ] Additional FoV toggle
+- [x] Touchscreen overlay
+- [x] Additional FoV toggle
 - [ ] Full 64-bit gameplay parity with 32-bit build
