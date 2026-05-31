@@ -11,11 +11,11 @@
   <a href="https://github.com/Andiweli/UT99-Android/releases">DOWNLOAD</a>
 </p>
 
-![Android 13](https://img.shields.io/badge/up%20to-Android%2013-green)
-![ABI](https://img.shields.io/badge/ABI-armeabi--v7a-orange)
-![Engine](https://img.shields.io/badge/engine-Unreal%20Engine%201-blue)
-![Controller](https://img.shields.io/badge/controls-Touch/Controller-blueviolet)
-![Multiplayer](https://img.shields.io/badge/multiplayer-local%20WiFi-blueviolet)
+![Android 13](https://img.shields.io/badge/OS-up%20to%20Android%2013-green)
+![ABI](https://img.shields.io/badge/ABI-armeabi--v7a/32bit-orange)
+![AI](https://img.shields.io/badge/AI-assisted%20coding-6e7781)
+![Controller](https://img.shields.io/badge/Controls-Touch/Controller-blueviolet)
+![Multiplayer](https://img.shields.io/badge/Multiplayer-local%20WiFi-blueviolet)
 
 
 > [!NOTE]
