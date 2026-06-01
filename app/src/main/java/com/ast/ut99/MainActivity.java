@@ -171,50 +171,45 @@ public class MainActivity extends Activity {
                 + " sdk=" + Build.VERSION.SDK_INT
                 + " legacySafe=" + launchedLegacySafeMode);
 
-        // Android 4.1/OUYA can be touchy when we finish the installer in the
-        // same looper turn that we start the SDL activity after a large copy.
-        // Keep the installer alive on old devices; if the native engine exits
-        // immediately, the user returns here instead of to the Android system.
-        showBusyScreen(t("Starte Unreal Tournament", "Starting Unreal Tournament"),
-                launchedLegacySafeMode
-                        ? t("Spieldaten gefunden. Engine wird im OUYA-Kompatibilitätsmodus gestartet …",
-                            "Game data found. Starting engine in OUYA compatibility mode …")
-                        : t("Spieldaten gefunden. Engine wird gestartet …", "Game data found. Starting engine …"));
+        // UT99_ANDROID_V166H_DIRECT_GAME_START:
+        // Do not show the Android-side "Starting Unreal Tournament" / OUYA
+        // compatibility busy screen when valid data is already installed.  The
+        // installer remains alive behind GameActivity on legacy devices, but
+        // the game activity is handed off immediately so the user goes straight
+        // into the native SDL/UE1 startup path.
+        android.util.Log.i("UT99Installer", "UT99_ANDROID_V166H_DIRECT_GAME_START no installer busy screen");
 
-        final long startDelay = Build.VERSION.SDK_INT <= 17 ? 1400L : 120L;
         final long finishDelay = Build.VERSION.SDK_INT <= 17 ? -1L : 450L;
-        new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-            try {
-                Intent intent = new Intent(MainActivity.this, GameActivity.class);
-                // UT99_ANDROID_V87_RELIABLE_RELAUNCH:
-                // Clear any stale GameActivity instance from the task before
-                // starting a fresh SDL/native run.  This avoids the intermittent
-                // "tap launcher twice until it loads" behaviour when Android
-                // revived an old :game task.
-                intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_CLEAR_TOP);
-                intent.putExtra(UT99Paths.EXTRA_DATA_ROOT, verifiedRoot.getAbsolutePath());
-                intent.putExtra(UT99Paths.EXTRA_LEGACY_SAFE_MODE, launchedLegacySafeMode);
-                startActivity(intent);
-                android.util.Log.i("UT99Installer", "GameActivity start requested legacySafe=" + launchedLegacySafeMode);
-            } catch (Throwable ex) {
-                android.util.Log.e("UT99Installer", "GameActivity launch failed", ex);
-                launchInProgress = false;
-                lastImportMessage = t("Spielstart fehlgeschlagen: ", "Game launch failed: ") + ex.getMessage();
-                showMissingDataScreen();
-                return;
-            }
+        try {
+            Intent intent = new Intent(MainActivity.this, GameActivity.class);
+            // UT99_ANDROID_V87_RELIABLE_RELAUNCH:
+            // Clear any stale GameActivity instance from the task before
+            // starting a fresh SDL/native run.  This avoids the intermittent
+            // "tap launcher twice until it loads" behaviour when Android
+            // revived an old :game task.
+            intent.addFlags(Intent.FLAG_ACTIVITY_NO_ANIMATION | Intent.FLAG_ACTIVITY_CLEAR_TOP);
+            intent.putExtra(UT99Paths.EXTRA_DATA_ROOT, verifiedRoot.getAbsolutePath());
+            intent.putExtra(UT99Paths.EXTRA_LEGACY_SAFE_MODE, launchedLegacySafeMode);
+            startActivity(intent);
+            android.util.Log.i("UT99Installer", "GameActivity start requested direct legacySafe=" + launchedLegacySafeMode);
+        } catch (Throwable ex) {
+            android.util.Log.e("UT99Installer", "GameActivity launch failed", ex);
+            launchInProgress = false;
+            lastImportMessage = t("Spielstart fehlgeschlagen: ", "Game launch failed: ") + ex.getMessage();
+            showMissingDataScreen();
+            return;
+        }
 
-            if (finishDelay >= 0L) {
-                new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
-                    try {
-                        finish();
-                    } catch (Throwable ignored) {
-                    }
-                }, finishDelay);
-            } else {
-                android.util.Log.i("UT99Installer", "legacy device: keeping installer activity alive behind GameActivity");
-            }
-        }, startDelay);
+        if (finishDelay >= 0L) {
+            new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> {
+                try {
+                    finish();
+                } catch (Throwable ignored) {
+                }
+            }, finishDelay);
+        } else {
+            android.util.Log.i("UT99Installer", "legacy device: keeping installer activity alive behind GameActivity");
+        }
     }
 
     private boolean isLegacyOuyaLikeDevice() {

@@ -1,1 +1,0 @@
-Place your Android armeabi-v7a libxmp.so here. Do not rename it.

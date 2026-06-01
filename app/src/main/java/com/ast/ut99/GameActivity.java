@@ -22,11 +22,14 @@ import java.io.File;
 public class GameActivity extends SDLActivity {
     private static final String TAG = "UT99Android";
 
-    // UT99_ANDROID_V73_RESOLUTION_SCALE_RESTORED:
-    // Preferences > Video > Resolution can request Native, 75% native Res. or 50% native Res.
-    // Java owns the Android SurfaceHolder buffer size so the EGL drawable really becomes smaller.
+    // UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS:
+    // Preferences > Video > Resolution now uses real SurfaceHolder backbuffer sizes:
+    // Native, computed 16:9 1080p/720p, and stretched 4:3 1080p/768p modes.
+    // The Android view stays fullscreen; only the render buffer changes.
     private static java.lang.ref.WeakReference<GameActivity> sUt99V64ActivityRef;
-    private int ut99V64ResolutionScalePercent = 100;
+    private static final String UT99_V166_PREFS = "ut99_v166_render_resolution";
+    private static final String UT99_V166_PREF_KEY_MODE = "mode";
+    private String ut99V166ResolutionMode = "Native";
 
     // UT99_ANDROID_V76_KEYBOARD_START_SAFE:
     // The SDL dummy text view must not summon the IME during engine start.
@@ -62,15 +65,21 @@ public class GameActivity extends SDLActivity {
     }
 
     public static void ut99ApplyResolutionScaleV64(final int percent) {
+        // Compatibility bridge for older native code paths. The old 75%/50% modes
+        // are intentionally mapped to Native because v166 removes percentage surface scaling.
+        ut99ApplyResolutionModeV166("Native");
+    }
+
+    public static void ut99ApplyResolutionModeV166(final String mode) {
         final GameActivity activity = sUt99V64ActivityRef != null ? sUt99V64ActivityRef.get() : null;
         if (activity == null) {
-            Log.w(TAG, "v73 resolution scale request ignored because GameActivity is not active percent=" + percent);
+            Log.w(TAG, "v166 resolution mode request ignored because GameActivity is not active mode=" + mode);
             return;
         }
 
         activity.runOnUiThread(new Runnable() {
             @Override public void run() {
-                activity.ut99V64ApplyResolutionScalePercent(percent, true);
+                activity.ut99V166ApplyResolutionMode(mode, true);
             }
         });
     }
@@ -116,7 +125,7 @@ public class GameActivity extends SDLActivity {
         dataRoot = resolveDataRootForGame();
         homeDir = UT99Paths.homeDir(this);
         legacySafeMode = resolveLegacySafeMode();
-        ut99V64ResolutionScalePercent = ut99V64ReadResolutionScalePercent();
+        ut99V166ResolutionMode = ut99V166ReadResolutionMode();
 
         applyUt99ImmersiveMode();
         sUt99ImeWanted = false;
@@ -179,16 +188,14 @@ public class GameActivity extends SDLActivity {
             android.util.Log.i("UT99Android", "UT99_ANDROID_V86_CONFIG_PRESERVE keeping existing AndroidUT99.ini/AndroidUser.ini");
         }
         applyUt99V65InitialNativeFontScaleConfig(androidIniCreatedV86);
-        ut99V64EnsureResolutionScaleConfig();
+        ut99V166EnsureResolutionModeConfig();
         super.onCreate(savedInstanceState);
         ut99V55ScheduleFixedSurface(); // v55 onCreate
         ut99V52ScheduleImmersive(); // v52 onCreate
-        // UT99_ANDROID_V63_CITYINTRO_START: do not cover CityIntro with the old static title/menu overlay.
-        // ut99V52ShowStartupOverlay();
-        android.util.Log.i("UT99Android", "UT99_ANDROID_V73_RESOLUTION_SCALE_RESTORED active percent=" + ut99V64ResolutionScalePercent);
-        ut99V50StageBranding();
+        // UT99_ANDROID_V166J_BRANDING_ASSET_CLEANUP:
+        // Old experimental static start-menu/background images are no longer staged or displayed.
+        android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS active mode=" + ut99V166ResolutionMode);
         ut99V50Immersive(); // v50 onCreate
-        stageBrandingAssetV47();
         applyUt99ImmersiveMode();
         ut99V91InstallTouchOverlay();
     }
@@ -724,37 +731,64 @@ public class GameActivity extends SDLActivity {
         }
     }
 
-    // UT99_ANDROID_V73_RESOLUTION_SCALE_RESTORED
-    private static final String UT99_V64_SCALE_SECTION = "NSDLDrv.NSDLClient";
-    private static final String UT99_V64_SCALE_KEY = "AndroidResolutionScale";
+    // UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS
+    private static final String UT99_V166_RES_SECTION = "NSDLDrv.NSDLClient";
+    private static final String UT99_V166_RES_KEY = "AndroidResolutionMode";
 
-    private int ut99V64NormalizeScalePercent(int percent) {
-        if (percent <= 55) return 50;
-        if (percent <= 85) return 75;
-        return 100;
+    private String ut99V166NormalizeResolutionMode(String raw) {
+        if (raw == null) return "Native";
+        String value = raw.trim();
+        if (value.length() == 0) return "Native";
+        String lower = value.toLowerCase(java.util.Locale.US).replace('\u00a0', ' ');
+        if (lower.equals("native") || lower.equals("100") || lower.equals("100%")) return "Native";
+        // Old percentage modes are deliberately retired in v166.
+        if (lower.contains("75") || lower.contains("50")) return "Native";
+        int xPos = Math.max(value.indexOf('x'), value.indexOf('X'));
+        if (xPos > 0) {
+            try {
+                int w = Integer.parseInt(value.substring(0, xPos).trim());
+                int h = Integer.parseInt(value.substring(xPos + 1).trim());
+                if (w >= 320 && h >= 240 && w <= 4096 && h <= 2160) {
+                    w = w & ~1;
+                    h = h & ~1;
+                    return w + "x" + h;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        return "Native";
     }
 
-    private int ut99V64ParseScalePercent(String raw, int fallback) {
-        if (raw == null) return fallback;
-        String value = raw.trim().toLowerCase(java.util.Locale.US);
-        if (value.length() == 0) return fallback;
-        if (value.contains("50")) return 50;
-        if (value.contains("75")) return 75;
-        if (value.contains("native") || value.contains("100") || value.equals("1") || value.equals("1.0") || value.equals("1.000000")) return 100;
+    private int[] ut99V166ParseResolutionMode(String mode) {
+        String normalized = ut99V166NormalizeResolutionMode(mode);
+        if ("Native".equals(normalized)) return null;
+        int xPos = normalized.indexOf('x');
+        if (xPos <= 0) return null;
         try {
-            float f = Float.parseFloat(value);
-            if (f > 0.0f && f <= 1.0f) {
-                return ut99V64NormalizeScalePercent(Math.round(f * 100.0f));
-            }
-            return ut99V64NormalizeScalePercent(Math.round(f));
+            int w = Integer.parseInt(normalized.substring(0, xPos));
+            int h = Integer.parseInt(normalized.substring(xPos + 1));
+            if (w >= 320 && h >= 240) return new int[] { w, h };
         } catch (Throwable ignored) {
         }
-        return fallback;
+        return null;
     }
 
-    private int ut99V64ReadResolutionScalePercent() {
+    private String ut99V166ReadResolutionMode() {
+        // UT99_ANDROID_V166C_RESOLUTION_PERSIST:
+        // Keep the user's selected render resolution in Android SharedPreferences as
+        // the authoritative fast path.  The INI entry is still mirrored for native
+        // Preferences/GetCurrentRes, but UE1 may rewrite INI files during shutdown.
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences(UT99_V166_PREFS, MODE_PRIVATE);
+            if (prefs != null && prefs.contains(UT99_V166_PREF_KEY_MODE)) {
+                return ut99V166NormalizeResolutionMode(prefs.getString(UT99_V166_PREF_KEY_MODE, "Native"));
+            }
+        } catch (Throwable t) {
+            android.util.Log.w("UT99Android", "v166c could not read resolution mode prefs", t);
+        }
+
         java.io.File root = getUt99ConfigRootV63();
-        if (root == null) return 100;
+        if (root == null) return "Native";
         java.io.File systemDir = new java.io.File(root, "System");
         java.io.File[] candidates = new java.io.File[] {
                 new java.io.File(systemDir, "AndroidUT99.ini"),
@@ -768,116 +802,93 @@ public class GameActivity extends SDLActivity {
                 String[] lines = text.split("\\r?\\n", -1);
                 for (String line : lines) {
                     String trimmed = line != null ? line.trim() : "";
-                    if (trimmed.toLowerCase(java.util.Locale.US).startsWith((UT99_V64_SCALE_KEY + "=").toLowerCase(java.util.Locale.US))) {
-                        return ut99V64ParseScalePercent(trimmed.substring(trimmed.indexOf('=') + 1), 100);
+                    if (trimmed.toLowerCase(java.util.Locale.US).startsWith((UT99_V166_RES_KEY + "=").toLowerCase(java.util.Locale.US))) {
+                        return ut99V166NormalizeResolutionMode(trimmed.substring(trimmed.indexOf('=') + 1));
                     }
                 }
             } catch (Throwable t) {
-                android.util.Log.w("UT99Android", "v64 could not read resolution scale from " + ini.getAbsolutePath(), t);
+                android.util.Log.w("UT99Android", "v166 could not read resolution mode from " + ini.getAbsolutePath(), t);
             }
         }
-        return 100;
+        return "Native";
     }
 
-    private void ut99V64EnsureResolutionScaleConfig() {
+    private void ut99V166WriteResolutionModePrefs(String mode) {
+        try {
+            mode = ut99V166NormalizeResolutionMode(mode);
+            android.content.SharedPreferences.Editor editor = getSharedPreferences(UT99_V166_PREFS, MODE_PRIVATE).edit();
+            editor.putString(UT99_V166_PREF_KEY_MODE, mode);
+            editor.apply();
+            android.util.Log.i("UT99Android", "UT99_ANDROID_V166C_RESOLUTION_PERSIST prefs mode=" + mode);
+        } catch (Throwable t) {
+            android.util.Log.e("UT99Android", "v166c failed to persist resolution mode prefs", t);
+        }
+    }
+
+    private void ut99V166EnsureResolutionModeConfig() {
         java.io.File root = getUt99ConfigRootV63();
         if (root == null) return;
         java.io.File systemDir = new java.io.File(root, "System");
         if (!systemDir.exists() && !systemDir.mkdirs()) {
-            android.util.Log.e("UT99Android", "v64 could not create System dir: " + systemDir.getAbsolutePath());
+            android.util.Log.e("UT99Android", "v166 could not create System dir: " + systemDir.getAbsolutePath());
             return;
         }
         java.io.File androidIni = new java.io.File(systemDir, "AndroidUT99.ini");
-        ut99V64WriteResolutionScaleConfig(androidIni, ut99V64ResolutionScalePercent, false);
+        ut99V166WriteResolutionModePrefs(ut99V166ResolutionMode);
+        ut99V166WriteResolutionModeConfig(androidIni, ut99V166ResolutionMode, false);
     }
 
-    private void ut99V64WriteResolutionScaleConfig(java.io.File ini, int percent, boolean overwrite) {
+    private void ut99V166WriteResolutionModeConfig(java.io.File ini, String mode, boolean overwrite) {
         if (ini == null) return;
-        percent = ut99V64NormalizeScalePercent(percent);
+        mode = ut99V166NormalizeResolutionMode(mode);
         try {
             String text = ini.exists() ? ut99V60ReadUtf8(ini) : "";
-            boolean hasKey = text.toLowerCase(java.util.Locale.US).contains((UT99_V64_SCALE_KEY + "=").toLowerCase(java.util.Locale.US));
+            boolean hasKey = text.toLowerCase(java.util.Locale.US).contains((UT99_V166_RES_KEY + "=").toLowerCase(java.util.Locale.US));
             if (!hasKey || overwrite) {
-                text = ut99V60UpsertKey(text, UT99_V64_SCALE_SECTION, UT99_V64_SCALE_KEY, String.valueOf(percent));
+                text = ut99V60UpsertKey(text, UT99_V166_RES_SECTION, UT99_V166_RES_KEY, mode);
                 ut99V60WriteUtf8(ini, text);
             }
         } catch (Throwable t) {
-            android.util.Log.e("UT99Android", "v64 failed to write resolution scale to " + ini.getAbsolutePath(), t);
+            android.util.Log.e("UT99Android", "v166 failed to write resolution mode to " + ini.getAbsolutePath(), t);
         }
-    }
-
-    private int[] ut99V64ResolveBaseSurfaceSize(android.view.SurfaceView sv) {
-        int baseW = 0;
-        int baseH = 0;
-        try {
-            if (sv != null && sv.getWidth() > 0 && sv.getHeight() > 0) {
-                baseW = sv.getWidth();
-                baseH = sv.getHeight();
-            }
-        } catch (Throwable ignored) {
-        }
-
-        if (baseW <= 0 || baseH <= 0) {
-            int[] displaySize = ut99V60ResolveNativeDisplaySize();
-            int displayW = displaySize[0];
-            int displayH = displaySize[1];
-            if (displayW > 0 && displayH > 0) {
-                baseW = Math.max(displayW, displayH);
-                baseH = Math.min(displayW, displayH);
-            }
-        }
-
-        return new int[] { baseW, baseH };
     }
 
     private void ut99V64ApplyResolutionScaleToSurface(android.view.SurfaceView sv) {
+        // Method name kept because older v55/v56 scheduling calls it.
         if (sv == null) return;
-        int percent = ut99V64NormalizeScalePercent(ut99V64ResolutionScalePercent);
+        String mode = ut99V166NormalizeResolutionMode(ut99V166ResolutionMode);
+        int[] fixed = ut99V166ParseResolutionMode(mode);
 
         android.view.SurfaceHolder holder = sv.getHolder();
         if (holder == null) return;
 
-        if (percent >= 100) {
+        if (fixed == null) {
             holder.setSizeFromLayout();
-            android.util.Log.i("UT99Android", "UT99_ANDROID_V73_RESOLUTION_SCALE_RESTORED SurfaceHolder Native layout size on " + sv.getClass().getName());
+            android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS SurfaceHolder Native layout size on " + sv.getClass().getName());
             return;
         }
 
-        int[] base = ut99V64ResolveBaseSurfaceSize(sv);
-        int baseW = base[0];
-        int baseH = base[1];
-        if (baseW <= 0 || baseH <= 0) {
-            holder.setSizeFromLayout();
-            android.util.Log.w("UT99Android", "v64 could not resolve base surface size, using native layout");
-            return;
-        }
-
-        int scaledW = Math.max(320, Math.round((baseW * percent) / 100.0f));
-        int scaledH = Math.max(240, Math.round((baseH * percent) / 100.0f));
-        scaledW = Math.max(320, scaledW & ~1);
-        scaledH = Math.max(240, scaledH & ~1);
-
-        holder.setFixedSize(scaledW, scaledH);
-        android.util.Log.i("UT99Android", "UT99_ANDROID_V73_RESOLUTION_SCALE_RESTORED SurfaceHolder "
-                + percent + "% of native " + baseW + "x" + baseH + " -> " + scaledW + "x" + scaledH
-                + " on " + sv.getClass().getName());
+        holder.setFixedSize(fixed[0], fixed[1]);
+        android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS SurfaceHolder fixed render="
+                + fixed[0] + "x" + fixed[1] + " fullscreen view on " + sv.getClass().getName());
     }
 
-    private void ut99V64ApplyResolutionScalePercent(int percent, boolean persist) {
-        ut99V64ResolutionScalePercent = ut99V64NormalizeScalePercent(percent);
+    private void ut99V166ApplyResolutionMode(String mode, boolean persist) {
+        ut99V166ResolutionMode = ut99V166NormalizeResolutionMode(mode);
         if (persist) {
+            ut99V166WriteResolutionModePrefs(ut99V166ResolutionMode);
             java.io.File root = getUt99ConfigRootV63();
             if (root != null) {
                 java.io.File systemDir = new java.io.File(root, "System");
                 if (!systemDir.exists()) systemDir.mkdirs();
-                ut99V64WriteResolutionScaleConfig(new java.io.File(systemDir, "AndroidUT99.ini"), ut99V64ResolutionScalePercent, true);
+                ut99V166WriteResolutionModeConfig(new java.io.File(systemDir, "AndroidUT99.ini"), ut99V166ResolutionMode, true);
             }
         }
 
         ut99V56SurfaceFixedOnce = false;
         ut99V55ApplyFixedSurface();
         ut99V55ScheduleFixedSurface();
-        android.util.Log.i("UT99Android", "UT99_ANDROID_V73_RESOLUTION_SCALE_RESTORED applied percent=" + ut99V64ResolutionScalePercent);
+        android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS applied mode=" + ut99V166ResolutionMode);
     }
 
     // UT99_ANDROID_IMMERSIVE_V44: keep the visible surface stable on Android handhelds.
@@ -981,38 +992,6 @@ public class GameActivity extends SDLActivity {
         return Math.abs(value) >= deadzone ? value : 0.0f;
     }
 
-    private void stageBrandingAssetV47() {
-        try {
-            java.io.File root = getExternalFilesDir(null);
-            if (root == null) {
-                return;
-            }
-            java.io.File uiDir = new java.io.File(root, "UI");
-            if (!uiDir.exists()) {
-                uiDir.mkdirs();
-            }
-            java.io.File out = new java.io.File(uiDir, "ut99_start_menu_v47.png");
-            java.io.InputStream in = getAssets().open("ut99_start_menu_v47.png");
-            try {
-                java.io.FileOutputStream fos = new java.io.FileOutputStream(out, false);
-                try {
-                    byte[] buf = new byte[8192];
-                    int r;
-                    while ((r = in.read(buf)) > 0) {
-                        fos.write(buf, 0, r);
-                    }
-                } finally {
-                    fos.close();
-                }
-            } finally {
-                in.close();
-            }
-            android.util.Log.i("UT99Android", "v47 staged branding image " + out.getAbsolutePath());
-        } catch (Throwable t) {
-            android.util.Log.e("UT99Android", "v47 could not stage branding asset", t);
-        }
-    }
-
     @Override
     public boolean dispatchKeyEvent(android.view.KeyEvent event) {
         final int action = event.getAction();
@@ -1110,33 +1089,11 @@ public class GameActivity extends SDLActivity {
         }
     }
 
-    private void ut99V50StageBranding() {
-        try {
-            java.io.File root = getExternalFilesDir(null);
-            if (root == null) return;
-            java.io.File uiDir = new java.io.File(root, "UI");
-            if (!uiDir.exists()) uiDir.mkdirs();
-            java.io.File out = new java.io.File(uiDir, "ut99_start_menu_v50.png");
-            java.io.InputStream in = getAssets().open("ut99_start_menu_v50.png");
-            try {
-                java.io.FileOutputStream fos = new java.io.FileOutputStream(out, false);
-                try {
-                    byte[] buf = new byte[8192];
-                    int r;
-                    while ((r = in.read(buf)) > 0) fos.write(buf, 0, r);
-                } finally { fos.close(); }
-            } finally { in.close(); }
-            android.util.Log.i("UT99Android", "v50 staged branding image " + out.getAbsolutePath());
-        } catch (Throwable t) {
-            android.util.Log.e("UT99Android", "v50 branding stage failed", t);
-        }
-    }
 
 
 
     // UT99_ANDROID_V52_IMMERSIVE_HARD
     private android.os.Handler ut99V52Handler;
-    private android.widget.ImageView ut99V52Overlay;
 
     private void ut99V52HardImmersive() {
         try {
@@ -1206,45 +1163,6 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable ignored) {}
     }
 
-    private void ut99V52ShowStartupOverlay() {
-        try {
-            int resId = getResources().getIdentifier("ut99_start_menu_v52", "drawable", getPackageName());
-            if (resId == 0) return;
-
-            if (ut99V52Overlay != null) {
-                return;
-            }
-
-            ut99V52Overlay = new android.widget.ImageView(this);
-            ut99V52Overlay.setImageResource(resId);
-            ut99V52Overlay.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            ut99V52Overlay.setBackgroundColor(android.graphics.Color.BLACK);
-            ut99V52Overlay.setClickable(false);
-            ut99V52Overlay.setFocusable(false);
-            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
-            addContentView(ut99V52Overlay, lp);
-
-            if (ut99V52Handler == null) {
-                ut99V52Handler = new android.os.Handler(android.os.Looper.getMainLooper());
-            }
-            ut99V52Handler.postDelayed(new Runnable() {
-                @Override public void run() {
-                    try {
-                        if (ut99V52Overlay != null) {
-                            ut99V52Overlay.setVisibility(android.view.View.GONE);
-                            android.util.Log.i("UT99Android", "UT99_ANDROID_V52_STARTUP_OVERLAY hidden");
-                        }
-                    } catch (Throwable ignored) {}
-                }
-            }, 900); // UT99_ANDROID_V55_OVERLAY_SHORT
-
-            android.util.Log.i("UT99Android", "UT99_ANDROID_V52_STARTUP_OVERLAY shown");
-        } catch (Throwable t) {
-            android.util.Log.e("UT99Android", "v52 startup overlay failed", t);
-        }
-    }
 
 
     @Override
@@ -1604,6 +1522,55 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable t) { return current; }
     }
 
+    private static boolean ut99V122ParseIniBool(String value, boolean fallback) {
+        if (value == null) return fallback;
+        String v = value.trim();
+        if (v.equalsIgnoreCase("true") || v.equalsIgnoreCase("yes") || v.equalsIgnoreCase("on") || v.equals("1")) return true;
+        if (v.equalsIgnoreCase("false") || v.equalsIgnoreCase("no") || v.equalsIgnoreCase("off") || v.equals("0")) return false;
+        return fallback;
+    }
+
+    private boolean ut99V122ReadAndroidInputDebugFlag(String flagName) {
+        if (flagName == null || flagName.length() == 0) return false;
+        java.io.File userIni = ut99V91UserIniFile();
+        java.io.File systemDir = userIni != null ? userIni.getParentFile() : null;
+        java.io.File[] files = new java.io.File[] {
+                userIni,
+                systemDir != null ? new java.io.File(systemDir, "AndroidUT99.ini") : null,
+                systemDir != null ? new java.io.File(systemDir, "User.ini") : null,
+                systemDir != null ? new java.io.File(systemDir, "UMenu.ini") : null
+        };
+        Boolean enabled = null;
+        Boolean specific = null;
+        for (java.io.File ini : files) {
+            if (ini == null || !ini.exists()) continue;
+            try {
+                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(ini));
+                try {
+                    String line;
+                    boolean inSection = false;
+                    while ((line = br.readLine()) != null) {
+                        String t = line.trim();
+                        if (t.length() == 0 || t.startsWith(";") || t.startsWith("#")) continue;
+                        if (t.startsWith("[") && t.endsWith("]")) {
+                            inSection = t.equalsIgnoreCase("[AndroidInputDebug]");
+                            continue;
+                        }
+                        if (!inSection) continue;
+                        int eq = t.indexOf('=');
+                        if (eq <= 0) continue;
+                        String key = t.substring(0, eq).trim();
+                        String value = t.substring(eq + 1).trim();
+                        if (key.equalsIgnoreCase("Enable")) enabled = ut99V122ParseIniBool(value, false);
+                        if (key.equalsIgnoreCase(flagName)) specific = ut99V122ParseIniBool(value, false);
+                    }
+                } finally { br.close(); }
+            } catch (Throwable ignored) {
+            }
+        }
+        return Boolean.TRUE.equals(enabled) && Boolean.TRUE.equals(specific);
+    }
+
     private static float ut99V91Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
 
     private static final class Ut99TouchOverlayViewV91 extends View {
@@ -1618,11 +1585,12 @@ public class GameActivity extends SDLActivity {
         private final android.graphics.Bitmap iconCrouch;
         private final android.graphics.Bitmap iconNext;
         private final android.graphics.Bitmap iconMenu;
-        private long lastConfigReadMs, lastMenuReadMs;
-        private boolean enabled = false, menuVisible = false;
+        private long lastConfigReadMs, lastMenuReadMs, lastDebugReadMs;
+        private boolean enabled = false, menuVisible = false, debugTouchMouseMenu = false;
         private float leftBaseX, leftBaseY, rightBaseX, rightBaseY, rightLastX, rightLastY, lx, ly, rx, ry;
-        private boolean fire, altFire, jump, crouch, next, menu;
-        private enum TouchRole { LEFT_STICK, RIGHT_LOOK, FIRE, ALTFIRE, JUMP, CROUCH, NEXT, MENU }
+        private boolean fire, fireButton, altFire, jump, crouch, next, menu;
+        private int rightFireAssistCount = 0;
+        private enum TouchRole { LEFT_STICK, RIGHT_LOOK, RIGHT_FIRE_ASSIST, FIRE, ALTFIRE, JUMP, CROUCH, NEXT, MENU }
 
         Ut99TouchOverlayViewV91(GameActivity activity) {
             super(activity);
@@ -1658,16 +1626,48 @@ public class GameActivity extends SDLActivity {
             }
         }
 
-        private void refreshState() {
+        private void refreshState() { refreshState(false); }
+
+        private void refreshState(boolean forceMenuRead) {
             long now = android.os.SystemClock.uptimeMillis();
             if (now - lastConfigReadMs > 900L) { lastConfigReadMs = now; enabled = activity.ut99V91ReadTouchOverlayEnabled(); }
-            if (now - lastMenuReadMs > 120L) {
+            if (forceMenuRead || now - lastMenuReadMs > 120L) {
                 lastMenuReadMs = now;
                 try { menuVisible = nativeAndroidIsMenuV92(); } catch (Throwable ignored) { menuVisible = false; }
             }
         }
 
-        private boolean active() { refreshState(); return enabled && !menuVisible; }
+        private boolean debugTouchMouseMenu() {
+            long now = android.os.SystemClock.uptimeMillis();
+            if (now - lastDebugReadMs > 1000L) {
+                lastDebugReadMs = now;
+                debugTouchMouseMenu = activity.ut99V122ReadAndroidInputDebugFlag("LogTouchMouseMenu");
+            }
+            return debugTouchMouseMenu;
+        }
+
+        private String actionName(int action) {
+            switch (action) {
+                case android.view.MotionEvent.ACTION_DOWN: return "DOWN";
+                case android.view.MotionEvent.ACTION_UP: return "UP";
+                case android.view.MotionEvent.ACTION_MOVE: return "MOVE";
+                case android.view.MotionEvent.ACTION_CANCEL: return "CANCEL";
+                case android.view.MotionEvent.ACTION_POINTER_DOWN: return "POINTER_DOWN";
+                case android.view.MotionEvent.ACTION_POINTER_UP: return "POINTER_UP";
+                default: return String.valueOf(action);
+            }
+        }
+
+        private String sourceName(android.view.MotionEvent event) {
+            int source = event != null ? event.getSource() : 0;
+            if ((source & android.view.InputDevice.SOURCE_MOUSE) == android.view.InputDevice.SOURCE_MOUSE) return "direct-mouse";
+            if ((source & android.view.InputDevice.SOURCE_TOUCHSCREEN) == android.view.InputDevice.SOURCE_TOUCHSCREEN) return "direct-touch";
+            return "motion-source-" + source;
+        }
+
+        private boolean active() { return active(false); }
+
+        private boolean active(boolean forceMenuRead) { refreshState(forceMenuRead); return enabled && !menuVisible; }
 
         @Override protected void onDraw(android.graphics.Canvas canvas) {
             super.onDraw(canvas);
@@ -1726,33 +1726,132 @@ public class GameActivity extends SDLActivity {
             }
         }
 
+        private boolean hasActiveRightLookPointerV123() {
+            for (int i = 0; i < roles.size(); ++i) {
+                if (roles.valueAt(i) == TouchRole.RIGHT_LOOK) return true;
+            }
+            return false;
+        }
+
+        private TouchRole resolveTouchRoleV123(float x, float y) {
+            TouchRole role = hitRole(x, y);
+            // UT99_ANDROID_V123_RIGHT_TOUCH_FIRE_ASSIST:
+            // First free touch on the right half remains relative look/turn.
+            // A second free touch on the right half becomes Fire while the
+            // original look pointer keeps aiming. Explicit overlay buttons keep
+            // their old roles, and menus still pass through via active(true).
+            if (role == TouchRole.RIGHT_LOOK && x >= getWidth() * 0.5f && hasActiveRightLookPointerV123()) {
+                return TouchRole.RIGHT_FIRE_ASSIST;
+            }
+            return role;
+        }
+
+        private void syncFireV123() {
+            boolean wantFire = fireButton || rightFireAssistCount > 0;
+            if (fire != wantFire) {
+                fire = wantFire;
+                nativeAndroidButtonV47(105, wantFire);
+            }
+        }
+
+        private void setFireButtonV123(boolean down) {
+            if (fireButton != down) {
+                fireButton = down;
+                syncFireV123();
+            }
+        }
+
+        private void addRightFireAssistV123() {
+            rightFireAssistCount++;
+            syncFireV123();
+        }
+
+        private void removeRightFireAssistV123() {
+            if (rightFireAssistCount > 0) rightFireAssistCount--;
+            syncFireV123();
+        }
+
         @Override public boolean onTouchEvent(android.view.MotionEvent event) {
             if (event == null) return false;
-            if (!active()) { releaseAll(); return false; }
             int action = event.getActionMasked(), index = event.getActionIndex();
+            boolean debug = debugTouchMouseMenu();
+            int pointerId = (index >= 0 && index < event.getPointerCount()) ? event.getPointerId(index) : -1;
+            TouchRole existingRole = pointerId >= 0 ? roles.get(pointerId) : null;
+
             if (action == android.view.MotionEvent.ACTION_DOWN || action == android.view.MotionEvent.ACTION_POINTER_DOWN) {
-                int pointerId = event.getPointerId(index);
-                TouchRole role = hitRole(event.getX(index), event.getY(index));
+                // UT99_ANDROID_V122_MENU_CLICK_PASSTHROUGH:
+                // The overlay is a fullscreen Java view above SDL.  Its cached
+                // menuVisible flag was enough to eat the first direct touch/mouse
+                // click right after UWindow opened; stick+ShoulderR never went
+                // through this Java view, which is why that path was reliable.
+                // Force a fresh native menu query for new pointers and do not
+                // consume direct menu clicks.  Already-owned gameplay pointers are
+                // still released normally below, so no virtual button can stick.
+                if (!active(true)) {
+                    releaseAll();
+                    roles.clear();
+                    if (debug) {
+                        Log.i("UT99_MENUCLICK", "UT99_ANDROID_V122 overlay pass-through action=" + actionName(action)
+                                + " source=" + sourceName(event)
+                                + " x=" + event.getX(index) + " y=" + event.getY(index)
+                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
+                    }
+                    return false;
+                }
+                TouchRole role = resolveTouchRoleV123(event.getX(index), event.getY(index));
                 roles.put(pointerId, role);
                 if (role == TouchRole.LEFT_STICK) { leftBaseX = event.getX(index); leftBaseY = event.getY(index); }
                 else if (role == TouchRole.RIGHT_LOOK) { rightBaseX = event.getX(index); rightBaseY = event.getY(index); rightLastX = rightBaseX; rightLastY = rightBaseY; }
-                updateRole(role, event.getX(index), event.getY(index), true);
+                if (role == TouchRole.RIGHT_FIRE_ASSIST) addRightFireAssistV123();
+                else updateRole(role, event.getX(index), event.getY(index), true);
+                if (debug) {
+                    Log.i("UT99_TOUCH", "UT99_ANDROID_V122 overlay consume action=" + actionName(action)
+                            + " source=" + sourceName(event)
+                            + " role=" + role
+                            + " x=" + event.getX(index) + " y=" + event.getY(index)
+                            + " enabled=" + enabled + " menuVisible=" + menuVisible);
+                }
                 return true;
             }
             if (action == android.view.MotionEvent.ACTION_MOVE) {
+                if (roles.size() == 0 && !active(true)) {
+                    if (debug) {
+                        Log.i("UT99_MENUCLICK", "UT99_ANDROID_V122 overlay motion pass-through source=" + sourceName(event)
+                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
+                    }
+                    return false;
+                }
                 for (int i = 0; i < event.getPointerCount(); ++i) {
                     TouchRole role = roles.get(event.getPointerId(i));
-                    if (role != null) updateRole(role, event.getX(i), event.getY(i), true);
+                    if (role != null && role != TouchRole.RIGHT_FIRE_ASSIST) updateRole(role, event.getX(i), event.getY(i), true);
                 }
                 return true;
             }
             if (action == android.view.MotionEvent.ACTION_CANCEL) { releaseAll(); roles.clear(); return true; }
             if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_POINTER_UP) {
-                int pointerId = event.getPointerId(index);
-                TouchRole role = roles.get(pointerId);
-                if (role != null) { updateRole(role, event.getX(index), event.getY(index), false); roles.remove(pointerId); return true; }
+                TouchRole role = existingRole;
+                if (role != null) {
+                    if (role == TouchRole.RIGHT_FIRE_ASSIST) removeRightFireAssistV123();
+                    else updateRole(role, event.getX(index), event.getY(index), false);
+                    roles.remove(pointerId);
+                    if (debug) {
+                        Log.i("UT99_TOUCH", "UT99_ANDROID_V122 overlay release action=" + actionName(action)
+                                + " source=" + sourceName(event)
+                                + " role=" + role
+                                + " x=" + event.getX(index) + " y=" + event.getY(index)
+                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
+                    }
+                    return true;
+                }
+                if (!active(true)) {
+                    if (debug) {
+                        Log.i("UT99_MENUCLICK", "UT99_ANDROID_V122 overlay up pass-through source=" + sourceName(event)
+                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
+                    }
+                    return false;
+                }
             }
-            return true;
+            return roles.size() > 0;
         }
 
         private TouchRole hitRole(float x, float y) {
@@ -1824,8 +1923,10 @@ public class GameActivity extends SDLActivity {
                     }
                     nativeAndroidTouchLookV101(rx, ry);
                     break;
+                case RIGHT_FIRE_ASSIST:
+                    break;
                 case FIRE:
-                    if (fire != down) { fire = down; nativeAndroidButtonV47(105, down); }
+                    setFireButtonV123(down);
                     break;
                 case ALTFIRE:
                     if (altFire != down) { altFire = down; nativeAndroidButtonV47(104, down); }
@@ -1848,7 +1949,7 @@ public class GameActivity extends SDLActivity {
         private void releaseAll() {
             if (lx != 0f || ly != 0f) { lx = ly = 0f; nativeAndroidAxisV47(android.view.MotionEvent.AXIS_X, 0f); nativeAndroidAxisV47(android.view.MotionEvent.AXIS_Y, 0f); }
             if (rx != 0f || ry != 0f) { rx = ry = 0f; nativeAndroidTouchLookV101(0f, 0f); }
-            if (fire) { fire = false; nativeAndroidButtonV47(105, false); }
+            if (fire || fireButton || rightFireAssistCount > 0) { fire = false; fireButton = false; rightFireAssistCount = 0; nativeAndroidButtonV47(105, false); }
             if (altFire) { altFire = false; nativeAndroidButtonV47(104, false); }
             if (jump) { jump = false; nativeAndroidButtonV47(96, false); }
             if (crouch) { crouch = false; nativeAndroidButtonV47(97, false); }

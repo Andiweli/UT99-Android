@@ -17,6 +17,10 @@ final class UT99Paths {
     static final String EXTRA_LEGACY_SAFE_MODE = "com.ast.ut99.EXTRA_LEGACY_SAFE_MODE";
     private static final String PREFS = "ut99_paths_v79";
     private static final String KEY_LAST_DATA_ROOT = "last_data_root";
+    private static final String KEY_SYSTEM_PATCH_FAST_ROOT = "system_patch_fast_root_v164";
+    private static final String KEY_SYSTEM_PATCH_FAST_VERSION = "system_patch_fast_version_v164";
+    private static final String KEY_SYSTEM_PATCH_APK_LAST_UPDATE = "system_patch_apk_last_update_v166k";
+    private static final String ANDROID_CONTROLLER_FAST_MARKER = ".ut99_android_controller_full_remap_v120_fast_v1l";
 
     // UT99_ANDROID_V136_BUNDLED_UMENU_PACKAGE:
     // Put the rebuilt UMenu.u into app/src/main/assets/ut99_patches/System/UMenu.u.
@@ -24,8 +28,8 @@ final class UT99Paths {
     // so release APKs carry the lean Android menu without manual adb pushes.
     private static final String TAG = "UT99Paths";
     private static final String BUNDLED_SYSTEM_PATCH_DIR = "ut99_patches/System";
-    private static final String BUNDLED_SYSTEM_PATCH_MARKER = ".ut99_android_bundled_system_patches_v160_touch_overlay";
-    private static final String BUNDLED_SYSTEM_PATCH_VERSION = "UT99_ANDROID_V160_TOUCH_OVERLAY_UMENU_FORCE_COPY_20260527";
+    private static final String BUNDLED_SYSTEM_PATCH_MARKER = ".ut99_android_bundled_system_patches_v166k_apk_install_refresh";
+    private static final String BUNDLED_SYSTEM_PATCH_VERSION = "UT99_ANDROID_V166K_APK_INSTALL_UMENU_REFRESH_20260531";
 
     private UT99Paths() {
     }
@@ -249,7 +253,7 @@ final class UT99Paths {
             context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
                     .edit()
                     .putString(KEY_LAST_DATA_ROOT, root.getAbsolutePath())
-                    .apply();
+                    .commit();
         } catch (Throwable ignored) {
         }
     }
@@ -321,17 +325,41 @@ final class UT99Paths {
         if (context == null || root == null) {
             return;
         }
+        long started = System.nanoTime();
+
+        // UT99_ANDROID_V166K_APK_INSTALL_UMENU_REFRESH:
+        // Keep the v163/v1j fast path for normal launches, but do not let it hide
+        // a bundled UMenu.u update after the APK was freshly installed over an
+        // existing data folder. Android keeps app data and SharedPreferences on
+        // over-install, so use the APK lastUpdateTime as a cheap install/update
+        // marker and force UMenu.u refresh once after every APK install.
+        String rootPath = root.getAbsolutePath();
+        long apkLastUpdateTime = currentApkLastUpdateTime(context);
+        boolean apkInstallRefreshNeeded = isApkInstallRefreshNeededV166k(context, apkLastUpdateTime);
+        try {
+            android.content.SharedPreferences prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+            String fastRoot = prefs.getString(KEY_SYSTEM_PATCH_FAST_ROOT, null);
+            String fastVersion = prefs.getString(KEY_SYSTEM_PATCH_FAST_VERSION, null);
+            if (!apkInstallRefreshNeeded && rootPath.equals(fastRoot) && BUNDLED_SYSTEM_PATCH_VERSION.equals(fastVersion)) {
+                long elapsedMs = (System.nanoTime() - started) / 1000000L;
+                Log.i(TAG, "UT99_ANDROID_V166K_SYSTEM_PATCHES: shared-pref current, skipped filesystem and asset probes packages=2");
+                Log.i("UT99_LOADPROF", "JAVA_SYSTEM_PATCHES copied=false skipped=2 markerSkip=true prefSkip=true apkRefresh=false ms=" + elapsedMs);
+                return;
+            }
+        } catch (Throwable ignored) {
+        }
+
         ensureSkeleton(root);
         File system = new File(root, "System");
         if (!system.isDirectory() && !system.mkdirs()) {
             throw new IOException("Cannot create System folder: " + system.getAbsolutePath());
         }
 
-        // UT99_ANDROID_V159_WIDESCREEN_FOV_CLIENT_EXEC:
-        // UMenu.u contains the Video/Game Preferences cleanup. UTMenu.u contains
-        // the Unreal Tournament-specific Audio page cleanup. Copy both when they
-        // are present in assets/ut99_patches/System, but keep source builds usable
-        // when one or both rebuilt packages are absent.
+        // UT99_ANDROID_V161_LOADPROF_FAST_SYSTEM_PATCH_COPY:
+        // v160 intentionally refreshed bundled UMenu.u/UTMenu.u on every launch,
+        // which was safe for menu rollout but wastes I/O every start. v161 keeps
+        // the same safety on first run/new marker, then skips copying while the
+        // installed marker and files are already current.
         String[] patchPackages = {"UMenu.u", "UTMenu.u"};
         File marker = new File(system, BUNDLED_SYSTEM_PATCH_MARKER);
         boolean markerCurrent = false;
@@ -340,28 +368,113 @@ final class UT99Paths {
             markerCurrent = markerText.indexOf(BUNDLED_SYSTEM_PATCH_VERSION) >= 0;
         }
 
+        // UT99_ANDROID_V163_SYSTEM_PATCH_MARKER_FAST_SKIP:
+        // OUYA showed almost 3 seconds spent here even when both packages were already current.
+        // The expensive part is probing APK assets on Android 4.x.  Once the marker and target
+        // files are present, skip the asset-open path completely.
+        boolean allTargetsPresent = true;
+        for (String packageName : patchPackages) {
+            File target = new File(system, packageName);
+            if (!target.isFile() || target.length() <= 0L) {
+                allTargetsPresent = false;
+                break;
+            }
+        }
+        if (!apkInstallRefreshNeeded && markerCurrent && allTargetsPresent) {
+            rememberFastSystemPatchSkip(context, rootPath);
+            long elapsedMs = (System.nanoTime() - started) / 1000000L;
+            Log.i(TAG, "UT99_ANDROID_V166K_SYSTEM_PATCHES: marker current, skipped asset probes packages=" + patchPackages.length);
+            Log.i("UT99_LOADPROF", "JAVA_SYSTEM_PATCHES copied=false skipped=" + patchPackages.length + " markerSkip=true prefSkip=false apkRefresh=false ms=" + elapsedMs);
+            return;
+        }
+
         boolean copiedAny = false;
+        int skippedCurrent = 0;
         for (String packageName : patchPackages) {
             String assetPath = BUNDLED_SYSTEM_PATCH_DIR + "/" + packageName;
             if (!assetExists(context, assetPath)) {
-                Log.i(TAG, "UT99_ANDROID_V160_SYSTEM_PATCHES: asset missing, keeping existing " + packageName);
+                Log.i(TAG, "UT99_ANDROID_V161_SYSTEM_PATCHES: asset missing, keeping existing " + packageName);
                 continue;
             }
 
             File target = new File(system, packageName);
-            // UT99_ANDROID_V160_TOUCH_OVERLAY_UMENU_FORCE_COPY:
-            // Always refresh bundled UMenu.u/UTMenu.u when the APK contains them.
-            // The older v159 marker could keep an already-installed UMenu.u even
-            // after the user rebuilt it, which made the Touch Controls checkbox
-            // disappear from Preferences > Game although the APK contained a new
-            // package.
+            boolean forceUMenuForApkInstall = apkInstallRefreshNeeded && "UMenu.u".equals(packageName);
+            if (!forceUMenuForApkInstall && markerCurrent && target.isFile() && target.length() > 0L) {
+                skippedCurrent++;
+                Log.i(TAG, "UT99_ANDROID_V166K_SYSTEM_PATCHES: current, skipped System/" + packageName + " size=" + target.length());
+                continue;
+            }
+
             copyAssetToFile(context, assetPath, target);
             copiedAny = true;
-            Log.i(TAG, "UT99_ANDROID_V160_SYSTEM_PATCHES: refreshed bundled System/" + packageName + " size=" + target.length());
+            Log.i(TAG, "UT99_ANDROID_V166K_SYSTEM_PATCHES: refreshed bundled System/" + packageName
+                    + " size=" + target.length()
+                    + " forceApkInstall=" + forceUMenuForApkInstall);
         }
 
-        if (copiedAny || !marker.isFile()) {
+        if (copiedAny || !markerCurrent || !marker.isFile()) {
             writeUtf8(marker, BUNDLED_SYSTEM_PATCH_VERSION + "\n");
+        }
+        if (new File(system, "UMenu.u").isFile() && new File(system, "UTMenu.u").isFile()) {
+            rememberFastSystemPatchSkip(context, rootPath);
+            rememberApkInstallRefreshV166k(context, apkLastUpdateTime);
+        }
+        long elapsedMs = (System.nanoTime() - started) / 1000000L;
+        Log.i("UT99_LOADPROF", "JAVA_SYSTEM_PATCHES copied=" + copiedAny
+                + " skipped=" + skippedCurrent
+                + " markerSkip=false prefSkip=false apkRefresh=" + apkInstallRefreshNeeded
+                + " ms=" + elapsedMs);
+    }
+
+    private static long currentApkLastUpdateTime(Context context) {
+        if (context == null) {
+            return 0L;
+        }
+        try {
+            android.content.pm.PackageInfo info = context.getPackageManager().getPackageInfo(context.getPackageName(), 0);
+            return info != null ? info.lastUpdateTime : 0L;
+        } catch (Throwable ignored) {
+            return 0L;
+        }
+    }
+
+    private static boolean isApkInstallRefreshNeededV166k(Context context, long apkLastUpdateTime) {
+        if (context == null || apkLastUpdateTime <= 0L) {
+            return false;
+        }
+        try {
+            long remembered = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .getLong(KEY_SYSTEM_PATCH_APK_LAST_UPDATE, 0L);
+            return remembered != apkLastUpdateTime;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static void rememberApkInstallRefreshV166k(Context context, long apkLastUpdateTime) {
+        if (context == null || apkLastUpdateTime <= 0L) {
+            return;
+        }
+        try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putLong(KEY_SYSTEM_PATCH_APK_LAST_UPDATE, apkLastUpdateTime)
+                    .commit();
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void rememberFastSystemPatchSkip(Context context, String rootPath) {
+        if (context == null || rootPath == null || rootPath.length() == 0) {
+            return;
+        }
+        try {
+            context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
+                    .edit()
+                    .putString(KEY_SYSTEM_PATCH_FAST_ROOT, rootPath)
+                    .putString(KEY_SYSTEM_PATCH_FAST_VERSION, BUNDLED_SYSTEM_PATCH_VERSION)
+                    .commit();
+        } catch (Throwable ignored) {
         }
     }
 
@@ -575,20 +688,36 @@ final class UT99Paths {
 
     private static void ensureAndroidControllerBindingConfig(File systemDir) throws IOException {
         if (systemDir == null) return;
+
+        File marker = new File(systemDir, ANDROID_CONTROLLER_FAST_MARKER);
+        if (marker.isFile()) {
+            return;
+        }
+
         File defUser = new File(systemDir, "DefUser.ini");
         String defText = readUtf8(defUser);
         if (defText.indexOf("UT99_ANDROID_CONTROLLER_FULL_REMAP_V120") < 0) {
             writeUtf8(defUser, buildAndroidDefUserIni());
             Log.i(TAG, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120 wrote DefUser.ini reset defaults");
         }
+
         File userIni = new File(systemDir, "AndroidUser.ini");
         String text = readUtf8(userIni);
         if (text.length() == 0) {
             writeUtf8(userIni, buildAndroidUserIni());
+            writeUtf8(marker, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120_FAST_V1L\n");
+            Log.i(TAG, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120 wrote AndroidUser.ini defaults and fast marker");
             return;
         }
+
+        if (text.indexOf("UT99_ANDROID_CONTROLLER_FULL_REMAP_V120") >= 0) {
+            writeUtf8(marker, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120_FAST_V1L\n");
+            Log.i(TAG, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120 fast marker current, skipped AndroidUser.ini migration");
+            return;
+        }
+
         String patched = text;
-        boolean firstV120Migration = text.indexOf("UT99_ANDROID_CONTROLLER_FULL_REMAP_V120") < 0;
+        boolean firstV120Migration = true;
         patched = ensureEngineInputLine(patched, "UnknownDA", "MoveForward", firstV120Migration);
         patched = ensureEngineInputLine(patched, "UnknownDF", "MoveBackward", firstV120Migration);
         patched = ensureEngineInputLine(patched, "UnknownD8", "StrafeLeft", firstV120Migration);
@@ -623,6 +752,7 @@ final class UT99Paths {
             writeUtf8(userIni, patched);
             Log.i(TAG, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120 patched AndroidUser.ini controller defaults");
         }
+        writeUtf8(marker, "UT99_ANDROID_CONTROLLER_FULL_REMAP_V120_FAST_V1L\n");
     }
 
     private static String ensureEngineInputLine(String text, String key, String value, boolean replaceExisting) {
