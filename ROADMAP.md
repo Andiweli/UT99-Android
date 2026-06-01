@@ -13,16 +13,16 @@
 
 - [x] Dynamic resolution scaling
 - [x] Optional scaling for lower spec-devices
+- [x] Additional FoV toggle
 
 ## Controls & Input
 
 - [x] Android gamepad support
 - [x] OUYA controller support
 - [x] Add Android mouse support
+- [x] Touchscreen overlay
 - [ ] Fix Keyboard input
 
-## Future/Uncertain Expansions
+## Not planned / not in the scope of this project
 
-- [x] Touchscreen overlay
-- [x] Additional FoV toggle
 - [ ] Full 64-bit gameplay parity with 32-bit build
