@@ -153,8 +153,8 @@ General setup:
 
 1. Clone the repository.
 2. Open the project in Android Studio.
-3. Make sure the Android SDK, NDK and CMake are installed.
-4. Fetch or provide required third-party dependencies such as SDL2 if they are not already present.
+3. Make sure the Android SDK 2022, NDK 23.1.7779620 and CMake 3.22.1 are installed.
+4. Fetch or provide required third-party dependencies such as SDL2 if they are not already present (now included for all those asking AI).
 5. Build the `app` module.
 
 Current Android build characteristics:
