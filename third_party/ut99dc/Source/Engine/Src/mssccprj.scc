@@ -1,0 +1,5 @@
+SCC = This is a Source Code Control file
+
+[Engine.dsp]
+SCC_Aux_Path = "\\server\safe\vss"
+SCC_Project_Name = "$/Unreal/Engine/Src", PBAAAAAA

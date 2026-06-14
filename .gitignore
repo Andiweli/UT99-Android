@@ -7,6 +7,3 @@ local.properties
 app/build/
 .cxx/
 .externalNativeBuild/
-third_party/SDL2/
-third_party/ut99dc/
-third_party/*.zip

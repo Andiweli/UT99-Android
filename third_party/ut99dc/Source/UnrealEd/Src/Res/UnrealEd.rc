@@ -1,0 +1,595 @@
+//Microsoft Developer Studio generated resource script.
+//
+#include "resource.h"
+
+#define APSTUDIO_READONLY_SYMBOLS
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 2 resource.
+//
+#include "afxres.h"
+
+/////////////////////////////////////////////////////////////////////////////
+#undef APSTUDIO_READONLY_SYMBOLS
+
+/////////////////////////////////////////////////////////////////////////////
+// English (U.S.) resources
+
+#if !defined(AFX_RESOURCE_DLL) || defined(AFX_TARG_ENU)
+#ifdef _WIN32
+LANGUAGE LANG_ENGLISH, SUBLANG_ENGLISH_US
+#pragma code_page(1252)
+#endif //_WIN32
+
+#ifdef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// TEXTINCLUDE
+//
+
+1 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "resource.h\0"
+END
+
+2 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "#include ""afxres.h""\r\n"
+    "\0"
+END
+
+3 TEXTINCLUDE DISCARDABLE 
+BEGIN
+    "\r\n"
+    "\0"
+END
+
+#endif    // APSTUDIO_INVOKED
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Icon
+//
+
+// Icon with lowest ID value placed first to ensure application icon
+// remains consistent on all systems.
+IDICON_Mainframe1       ICON    DISCARDABLE     "..\\res\\Unreal.ico"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Menu
+//
+
+IDMENU_TempMenu MENU DISCARDABLE 
+BEGIN
+    POPUP "&File"
+    BEGIN
+        MENUITEM "&New...\tCtrl+N",             ID_FileNew
+        MENUITEM "&Open...\tCtrl+O",            ID_FileOpen
+        MENUITEM "&Close",                      ID_FileClose
+        MENUITEM SEPARATOR
+        MENUITEM "&Save\tCtrl+L",               ID_FileSave
+        MENUITEM "Save &As...",                 ID_FileSaveAs
+        MENUITEM "Save A&ll",                   ID_FileSaveAll
+        MENUITEM SEPARATOR
+        MENUITEM "&Import...",                  ID_FILE_IMPORT
+        MENUITEM "&Export...",                  ID_FileExport
+        MENUITEM SEPARATOR
+        MENUITEM "E&xit",                       ID_FileExit
+    END
+    POPUP "&Edit"
+    BEGIN
+        MENUITEM "&Undo\tCtrl+Z",               ID_EditUndo
+        MENUITEM "&Redo\tCtrl+Y",               ID_EditRedo
+        MENUITEM SEPARATOR
+        MENUITEM "Cu&t\tCtrl+X",                ID_EditCut
+        MENUITEM "&Copy\tCtrl+C",               ID_EditCopy
+        MENUITEM "&Paste\tCtrl+V",              ID_EditPaste
+        MENUITEM SEPARATOR
+        MENUITEM "D&uplicate\tCtrl+W",          ID_EditDuplicate
+        MENUITEM "&Delete\tDel",                ID_EditDelete
+        MENUITEM SEPARATOR
+        MENUITEM "Select &None\tShift+Z",       ID_EditSelectNone
+        MENUITEM "Select A&ll Actors\tShift+A", ID_EditSelectAllActors
+        MENUITEM "Select A&ll Surfaces\tShift+S", ID_EditSelectAllSurfs
+        POPUP "&Select Surfaces"
+        BEGIN
+            MENUITEM "Matching &Groups\tShift+G",   ID_SurfPopupSelectMatchingGroups
+
+            MENUITEM "Matching &Items\tShift+I",    ID_SurfPopupSelectMatchingItems
+
+            MENUITEM "Matching &Brush\tShift+B",    ID_SurfPopupSelectMatchingBrush
+
+            MENUITEM "Matching &Texture\tShift+T",  ID_SurfPopupSelectMatchingTexture
+
+            MENUITEM SEPARATOR
+            MENUITEM "All Ad&jacents\tShift+J",     ID_SurfPopupSelectAllAdjacents
+
+            MENUITEM "Adjacent &Coplanars\tShift+C", 
+                                                    ID_SurfPopupSelectAdjacentCoplanars
+
+            MENUITEM "Adjacent &Walls\tShift+W",    ID_SurfPopupSelectAdjacentWalls
+
+            MENUITEM "Adjacent &Floors/Ceilings\tShift+F", 
+                                                    ID_SurfPopupSelectAdjacentFloors
+
+            MENUITEM "Adjacent &Slants\tShift+S",   ID_SurfPopupSelectAdjacentSlants
+
+            MENUITEM SEPARATOR
+            MENUITEM "Reverse\tShift+Q",            ID_SurfPopupSelectReverse
+
+            MENUITEM SEPARATOR
+            MENUITEM "&Memorize Set\tShift+M",      ID_SurfPopupMemorize
+            MENUITEM "&Recall Memory\tShift+R",     ID_SurfPopupRecall
+            MENUITEM "&Or With Memory\tShift+O",    ID_SurfPopupOr
+            MENUITEM "&And With Memory\tShift+U",   ID_SurfPopupAnd
+            MENUITEM "&Xor With Memory\tShift+X",   ID_SurfPopupXor
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Find...\tCtrl+F",            ID_EditFind
+        MENUITEM "R&eplace...\tCtrl+H",         ID_EditReplace
+    END
+    POPUP "&Brush"
+    BEGIN
+        MENUITEM "&Add\tCtrl+A",                ID_BrushAdd
+        MENUITEM "&Subtract\tCtrl+S",           ID_BrushSubtract
+        MENUITEM "&Intersect\tCtrl+N",          ID_BrushIntersect
+        MENUITEM "&Deintersect\tCtrl+D",        ID_BrushDeintersect
+        MENUITEM SEPARATOR
+        MENUITEM "&Add Mover",                  ID_BrushAddMover
+        MENUITEM "&Add Special...",             ID_BrushAddSpecial
+        MENUITEM SEPARATOR
+        POPUP "&Brush Factories"
+        BEGIN
+            MENUITEM "Box",                         ID_BrushFactorBox
+            MENUITEM "Cylinder",                    ID_BrushFactorCylinder
+            MENUITEM "Cone",                        ID_BrushFactorCone
+            MENUITEM "Linear Staircase",            ID_BrushFactorLinearStair
+
+            MENUITEM "Spiral Staircase",            ID_BrushFactorSpiralStair
+
+            MENUITEM "Curved Staircase",            ID_BrushFactorCurvedStair
+
+            MENUITEM "Sphere",                      ID_BrushFactorSphere
+            MENUITEM "Pyramid",                     ID_BrushFactorPyramid
+            MENUITEM "Prysm",                       ID_BrushFactorPrysm
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Open Brush\tCtrl+B",         ID_BrushOpen
+        MENUITEM "&Save Brush",                 ID_BrushSave
+        MENUITEM "&Save Brush As...",           ID_BrushSaveAs
+    END
+    POPUP "&View"
+    BEGIN
+        MENUITEM "&Actor Properties\tF4",       ID_ViewActorProp
+        MENUITEM "&Surface Properties\tF5",     ID_ViewSurfaceProp
+        MENUITEM "&Level Properties\tF6",       ID_ViewLevelProp
+        MENUITEM "Advanced &Options\tF7",       ID_ToolsPrefs
+        MENUITEM SEPARATOR
+        MENUITEM "New Free Viewport",           ID_ViewNewFree
+        MENUITEM "Close All Free Viewports",    ID_ViewCloseFree
+        MENUITEM SEPARATOR
+        MENUITEM "Status Bar",                  ID_ViewToggleStatusBar
+        , CHECKED
+        MENUITEM "Update All Views",            ID_ViewToggleUpdateAll
+        , CHECKED
+    END
+    POPUP "B&uild"
+    BEGIN
+        MENUITEM "&Play Level\tCtrl+P",         ID_BuildPlay
+        MENUITEM SEPARATOR
+        MENUITEM "&Rebuild Level",              ID_BuildRebuild
+        POPUP "&Partial Rebuild"
+        BEGIN
+            MENUITEM "Rebuild &Geometry Only",      ID_BuildGeometry
+            MENUITEM "Rebuild &BSP Only",           ID_BuildBSP
+            MENUITEM "Rebuild Lighting Only",       ID_BuildLighting
+        END
+        MENUITEM "Define &AI Paths",            ID_BuildPaths
+        MENUITEM SEPARATOR
+        MENUITEM "&Build Changed Scripts\tF9",  ID_BuildChanged
+        MENUITEM "Build &All Scripts",          ID_BuildAll
+    END
+    POPUP "&Tools"
+    BEGIN
+        MENUITEM "2D &Editor",                  ID_Tools2DEditor
+        MENUITEM "&Log",                        ID_ToolsLog
+        MENUITEM SEPARATOR
+        MENUITEM "&System Plug-ins",            65535
+        POPUP "&Level Plug-ins"
+        BEGIN
+            MENUITEM "&Validate Level",             ID_ToolsValidate
+            MENUITEM "&Show Links",                 ID_ToolsShowLinks
+            MENUITEM "Level &Statistics",           ID_ToolsLevelStats
+        END
+        MENUITEM "&Viewport Plug-ins",          65535
+    END
+    POPUP "&Window"
+    BEGIN
+        MENUITEM "Close A&ll",                  ID_WindowCloseAll
+        MENUITEM SEPARATOR
+        MENUITEM "&Cascade",                    ID_WindowCascade
+        MENUITEM "Tile &Horizontally",          ID_WindowTileH
+        MENUITEM "Tile &Vertically",            ID_WindowTileV
+    END
+    POPUP "&Help"
+    BEGIN
+        MENUITEM "&Contents",                   ID_HelpContents
+        MENUITEM "&Search",                     ID_HelpSearch
+        MENUITEM "&Index",                      ID_HelpIndex
+        MENUITEM SEPARATOR
+        MENUITEM "&Technical Support",          ID_HelpSupport
+        MENUITEM "UnrealEd &Web Site",          ID_HelpWebProduct
+        MENUITEM "&Epic Games Web Site",    ID_HelpWeb
+        MENUITEM SEPARATOR
+        MENUITEM "&About UnrealEd",             ID_HelpAbout
+    END
+END
+
+IDMENU_BackdropPopup MENU DISCARDABLE 
+BEGIN
+    POPUP "BackdropPopup"
+    BEGIN
+        MENUITEM "&Add %s here",                ID_BackdropPopupAddClassHere
+        MENUITEM "&Add Light here",             ID_BackdropPopupAddLightHere
+        MENUITEM SEPARATOR
+        POPUP "&Grid"
+        BEGIN
+            MENUITEM "&1 unit",                     ID_BackdropPopupGrid1
+            MENUITEM "&2 units",                    ID_BackdropPopupGrid2
+            MENUITEM "&4 units",                    ID_BackdropPopupGrid4
+            MENUITEM "&8 units",                    ID_BackdropPopupGrid8
+            MENUITEM "&16 units",                   ID_BackdropPopupGrid16
+            MENUITEM "&32 units",                   ID_BackdropPopupGrid32
+            MENUITEM "&64 units",                   ID_BackdropPopupGrid64
+            MENUITEM "128 units",                   ID_BackdropPopupGrid128
+            MENUITEM "256 units",                   ID_BackdropPopupGrid256
+            MENUITEM "&Disabled",                   ID_BackdropPopupGridDisabled
+
+            MENUITEM "&Custom...",                  ID_BackdropPopupGridCustom
+
+        END
+        POPUP "&Pivot"
+        BEGIN
+            MENUITEM "Place Pivot &Snapped Here",   ID_BackdropPopupPivotSnapped
+
+            MENUITEM "&Place Pivot Here",           ID_BackdropPopupPivot
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Level Properties",           ID_BackdropPopupLevelProperties
+
+    END
+END
+
+IDMENU_ActorPopup MENU DISCARDABLE 
+BEGIN
+    POPUP "ActorPopup"
+    BEGIN
+        MENUITEM "%s &Properties (%i Selected)", IDMENU_ActorPopupProperties
+        POPUP "&Mover Keyframe"
+        BEGIN
+            MENUITEM "Key &0 (Base)",               IDMENU_ActorPopupKey0
+            MENUITEM "Key &1",                      IDMENU_ActorPopupKey1
+            MENUITEM "Key &2",                      IDMENU_ActorPopupKey2
+            MENUITEM "Key &3",                      IDMENU_ActorPopupKey3
+            MENUITEM "Key &4",                      IDMENU_ActorPopupKey4
+            MENUITEM "Key &5",                      IDMENU_ActorPopupKey5
+            MENUITEM "Key &6",                      IDMENU_ActorPopupKey6
+            MENUITEM "Key &7",                      IDMENU_ActorPopupKey7
+        END
+        POPUP "&Reset"
+        BEGIN
+            MENUITEM "&Move To Origin",             IDMENU_ActorPopupResetOrigin
+
+            MENUITEM "Reset &Pivot",                IDMENU_ActorPopupResetPivot
+
+            MENUITEM "Reset &Rotation",             IDMENU_ActorPopupResetRotation
+
+            MENUITEM "Reset &Scaling",              IDMENU_ActorPopupResetScaling
+
+            MENUITEM "&Reset All",                  IDMENU_ActorPopupResetAll
+
+        END
+        POPUP "&Transform"
+        BEGIN
+            MENUITEM "Mirror About &X",             IDMENU_ActorPopupMirrorX
+            MENUITEM "Mirror About &Y",             IDMENU_ActorPopupMirrorY
+            MENUITEM "Mirror About &Z (vertical)",  IDMENU_ActorPopupMirrorZ
+            MENUITEM "&Transform Permanently",      IDMENU_ActorPopupPerm
+        END
+        POPUP "&Order"
+        BEGIN
+            MENUITEM "To &First",                   IDMENU_ActorPopupToFirst
+            MENUITEM "To &Last",                    IDMENU_ActorPopupToLast
+        END
+        POPUP "&Copy Polygons"
+        BEGIN
+            MENUITEM "&To Brush",                   IDMENU_ActorPopupToBrush
+            MENUITEM "&From Brush",                 IDMENU_ActorPopupFromBrush
+
+        END
+        POPUP "&Solidity"
+        BEGIN
+            MENUITEM "Make &Solid",                 IDMENU_ActorPopupMakeSolid
+
+            MENUITEM "Make S&emisolid",             IDMENU_ActorPopupMakeSemisolid
+
+            MENUITEM "Make &Nonsolid",              IDMENU_ActorPopupMakeNonSolid
+
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "&Select All %s Actors",       IDMENU_ActorPopupSelectAllClass
+
+        MENUITEM "Select &All",                 IDMENU_ActorPopupSelectAll
+        MENUITEM "Select &None",                IDMENU_ActorPopupSelectNone
+        POPUP "Select &Brushes"
+        BEGIN
+            MENUITEM "&Adds",                       IDMENU_ActorPopupSelectBrushesAdd
+
+            MENUITEM "&Subtracts",                  IDMENU_ActorPopupSelectBrushesSubtract
+
+            MENUITEM "S&emisolids",                 IDMENU_ActorPopupSubtractBrushesSemisolid
+
+            MENUITEM "&Nonsolids",                  IDMENU_ActorPopupSelectBrushesNonsolid
+
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "D&uplicate",                  IDMENU_ActorPopupDuplicate
+        MENUITEM "&Delete",                     IDMENU_ActorPopupDelete
+        MENUITEM "&Edit Script",                IDMENU_ActorPopupEditScript
+    END
+END
+
+IDMENU_SurfPopup MENU DISCARDABLE 
+BEGIN
+    MENUITEM "SurfPopup",                   65535
+    MENUITEM "Surface &Properties (%i Selected)\tF5", ID_SurfProperties
+    MENUITEM SEPARATOR
+    MENUITEM "&Add %s Here",                ID_SurfPopupAddClass
+    MENUITEM "Add &Light Here",             ID_SurfPopupAddLight
+    MENUITEM SEPARATOR
+    POPUP "&Align Selected"
+    BEGIN
+        MENUITEM "Align as &Floor/Ceiling",     ID_SurfPopupAlignFloor
+        MENUITEM "Align &One Tile",             ID_SurfPopupAlignOneTile
+        MENUITEM SEPARATOR
+        MENUITEM "Align Wall &Direction",       ID_SurfPopupAlignWallDirection
+
+        MENUITEM "Align Wall &Panning",         ID_SurfPopupAlignWallPanning
+        MENUITEM SEPARATOR
+        MENUITEM "&Unalign back to default",    ID_SurfPopupUnalign
+    END
+    MENUITEM "&Reset",                      ID_SurfPopupReset
+    MENUITEM SEPARATOR
+    POPUP "&Select Surfaces"
+    BEGIN
+        MENUITEM "Matching &Groups\tShift+G",   ID_SurfPopupSelectMatchingGroups
+
+        MENUITEM "Matching &Items\tShift+I",    ID_SurfPopupSelectMatchingItems
+
+        MENUITEM "Matching &Brush\tShift+B",    ID_SurfPopupSelectMatchingBrush
+
+        MENUITEM "Matching &Texture\tShift+T",  ID_SurfPopupSelectMatchingTexture
+
+        MENUITEM SEPARATOR
+        MENUITEM "All Ad&jacents\tShift+J",     ID_SurfPopupSelectAllAdjacents
+
+        MENUITEM "Adjacent &Coplanars\tShift+C", 
+                                                ID_SurfPopupSelectAdjacentCoplanars
+
+        MENUITEM "Adjacent &Walls\tShift+W",    ID_SurfPopupSelectAdjacentWalls
+
+        MENUITEM "Adjacent &Floors/Ceilings\tShift+F", 
+                                                ID_SurfPopupSelectAdjacentFloors
+
+        MENUITEM "Adjacent &Slants\tShift+S",   ID_SurfPopupSelectAdjacentSlants
+
+        MENUITEM SEPARATOR
+        MENUITEM "Reverse\tShift+Q",            ID_SurfPopupSelectReverse
+        MENUITEM SEPARATOR
+        MENUITEM "&Memorize Set\tShift+M",      ID_SurfPopupMemorize
+        MENUITEM "&Recall Memory\tShift+R",     ID_SurfPopupRecall
+        MENUITEM "&Or With Memory\tShift+O",    ID_SurfPopupOr
+        MENUITEM "&And With Memory\tShift+U",   ID_SurfPopupAnd
+        MENUITEM "&Xor With Memory\tShift+X",   ID_SurfPopupXor
+    END
+    MENUITEM "Select &All Surfaces\tShift+S", ID_EditSelectAllSurfs
+    MENUITEM "Select &None\tShift+Z",       ID_EditSelectNone
+    MENUITEM SEPARATOR
+    MENUITEM "Apply &Texture",              ID_SurfPopupApplyTexture
+END
+
+IDMENU_ViewportPopup MENU DISCARDABLE 
+BEGIN
+    POPUP "IDMENU_ViewportPopup"
+    BEGIN
+        POPUP "&Mode"
+        BEGIN
+            MENUITEM "&Lit",                        ID_ViewportPopupModeLit
+            MENUITEM "&Textured",                   ID_ViewportPopupModeTextured
+
+            MENUITEM "&Polygons",                   ID_ViewportPopupModePolygons
+
+            MENUITEM "&Zones and Portals",          ID_ViewportPopupModeZones
+
+            MENUITEM "&Bsp Cuts",                   ID_ViewportPopupModeBsp
+            MENUITEM SEPARATOR
+            MENUITEM "Map &Overhead",               ID_ViewportPopupModeMapOverhead
+
+            MENUITEM "Map &XZ",                     ID_ViewportPopupModeMapXZ
+
+            MENUITEM "Map &YZ",                     ID_ViewportPopupModeMapYZ
+
+            MENUITEM "&Map Perspective",            ID_ViewportPopupModeMapPersp
+
+        END
+        POPUP "&View"
+        BEGIN
+            MENUITEM "Show &Active Brush",          ID_ViewportPopupViewActiveBrush
+
+            MENUITEM "Show &Movers",                ID_ViewportPopupViewMovers
+
+            MENUITEM "Show &Paths",                 ID_ViewportPopupViewPaths
+
+        END
+        POPUP "&Actors"
+        BEGIN
+            MENUITEM "&Full Actor View",            ID_ViewportPopupActorsFull
+
+            MENUITEM "&Icon View",                  ID_ViewportPopupActorsIcon
+
+            MENUITEM "&Radius View",                ID_ViewportPopupActorsRadius
+
+            MENUITEM "&Hide Actors",                ID_ViewportPopupActorsHide
+
+        END
+        POPUP "&Grid"
+        BEGIN
+            MENUITEM "&1 Unit",                     ID_ViewportPopupGrid1
+            MENUITEM "&2 Units",                    ID_ViewportPopupGrid2
+            MENUITEM "&4 Units",                    ID_ViewportPopupGrid4
+            MENUITEM "&8 Units",                    ID_ViewportPopupGrid8
+            MENUITEM "1&6 Units",                   ID_ViewportPopupGrid16
+            MENUITEM "&32 Units",                   ID_ViewportPopupGrid32
+            MENUITEM "&64 Units",                   ID_ViewportPopupGrid64
+            MENUITEM "128 Units",                   ID_ViewportPopupGrid128
+            MENUITEM "256 Units",                   ID_ViewportPopupGrid256
+            MENUITEM "&Disabled",                   ID_ViewportPopupGridDisabled
+
+            MENUITEM "&Custom...",                  ID_ViewportPopupGridCustom
+
+        END
+        MENUITEM SEPARATOR
+        MENUITEM "Animate Viewport",            ID_ViewportPopupAnimate
+    END
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Dialog
+//
+
+IDDIALOG_Splash DIALOGEX 0, 0, 246, 65
+STYLE DS_MODALFRAME | DS_SETFOREGROUND | DS_CENTER | WS_POPUP | WS_VISIBLE
+EXSTYLE WS_EX_TOOLWINDOW
+FONT 8, "MS Sans Serif", 0, 0, 0x1
+BEGIN
+    CONTROL         101,IDC_Logo,"Static",SS_BITMAP | SS_REALSIZEIMAGE,0,0,
+                    229,50
+END
+
+IDDIALOG_NewObject DIALOG DISCARDABLE  0, 0, 372, 231
+STYLE DS_MODALFRAME | DS_CENTER | WS_POPUP | WS_CAPTION | WS_SYSMENU
+CAPTION "New"
+FONT 8, "MS Sans Serif"
+BEGIN
+    DEFPUSHBUTTON   "OK",IDOK,5,215,51,14
+    PUSHBUTTON      "Cancel",IDCANCEL,70,215,50,14
+    GROUPBOX        "Object Types",IDC_STATIC,5,5,130,205
+    LISTBOX         IDC_TypeList,10,15,120,190,LBS_SORT | 
+                    LBS_NOINTEGRALHEIGHT | WS_VSCROLL | WS_TABSTOP
+    GROUPBOX        "Creation Properties",IDC_STATIC,140,5,225,220
+    CONTROL         "",IDC_PropHolder,"Static",SS_BLACKFRAME,145,15,215,205
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Bitmap
+//
+
+IDB_Logo                BITMAP  DISCARDABLE     "..\\res\\Logo.bmp"
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// Accelerator
+//
+
+IDR_ACCELERATOR1 ACCELERATORS DISCARDABLE 
+BEGIN
+    "A",            ID_BrushAdd,            VIRTKEY, CONTROL, NOINVERT
+    "A",            ID_EditSelectAllActors, VIRTKEY, SHIFT, NOINVERT
+    "B",            ID_SurfPopupSelectMatchingBrush, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "C",            ID_EditCopy,            VIRTKEY, CONTROL, NOINVERT
+    "C",            ID_SurfPopupSelectAdjacentCoplanars, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "D",            ID_BrushDeintersect,    VIRTKEY, CONTROL, NOINVERT
+    "F",            ID_EditFind,            VIRTKEY, CONTROL, NOINVERT
+    "F",            ID_SurfPopupSelectAdjacentFloors, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "G",            ID_SurfPopupSelectMatchingGroups, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "H",            ID_EditReplace,         VIRTKEY, CONTROL, NOINVERT
+    "I",            ID_SurfPopupSelectMatchingItems, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "J",            ID_SurfPopupSelectAllAdjacents, VIRTKEY, SHIFT, NOINVERT
+    "L",            ID_FileSave,            VIRTKEY, CONTROL, NOINVERT
+    "M",            ID_SurfPopupMemorize,   VIRTKEY, CONTROL, NOINVERT
+    "N",            ID_FileNew,             VIRTKEY, CONTROL, NOINVERT
+    "N",            ID_BrushIntersect,      VIRTKEY, CONTROL, NOINVERT
+    "O",            ID_FileOpen,            VIRTKEY, CONTROL, NOINVERT
+    "O",            ID_SurfPopupOr,         VIRTKEY, SHIFT, NOINVERT
+    "P",            ID_BuildPlay,           VIRTKEY, CONTROL, NOINVERT
+    "Q",            ID_SurfPopupSelectReverse, VIRTKEY, SHIFT, NOINVERT
+    "R",            ID_SurfPopupRecall,     VIRTKEY, SHIFT, NOINVERT
+    "S",            ID_BrushSubtract,       VIRTKEY, CONTROL, NOINVERT
+    "S",            ID_EditSelectAllSurfs,  VIRTKEY, SHIFT, NOINVERT
+    "S",            ID_SurfPopupSelectAdjacentSlants, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "T",            ID_SurfPopupSelectMatchingTexture, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "U",            ID_SurfPopupAnd,        VIRTKEY, SHIFT, NOINVERT
+    "V",            ID_EditPaste,           VIRTKEY, CONTROL, NOINVERT
+    VK_DELETE,      ID_EditDelete,          VIRTKEY, NOINVERT
+    VK_F4,          ID_ViewActorProp,       VIRTKEY, NOINVERT
+    VK_F5,          ID_SurfProperties,      VIRTKEY, NOINVERT
+    VK_F6,          ID_ViewLevelProp,       VIRTKEY, NOINVERT
+    VK_F7,          ID_ViewPrefs,           VIRTKEY, NOINVERT
+    VK_F9,          ID_BuildChanged,        VIRTKEY, NOINVERT
+    "W",            ID_EditDuplicate,       VIRTKEY, CONTROL, NOINVERT
+    "W",            ID_SurfPopupSelectAdjacentWalls, VIRTKEY, SHIFT, 
+                                                    NOINVERT
+    "X",            ID_EditCut,             VIRTKEY, CONTROL, NOINVERT
+    "X",            ID_SurfPopupXor,        VIRTKEY, SHIFT, NOINVERT
+    "Y",            ID_EditRedo,            VIRTKEY, CONTROL, NOINVERT
+    "Z",            ID_EditUndo,            VIRTKEY, CONTROL, NOINVERT
+    "Z",            ID_EditSelectNone,      VIRTKEY, SHIFT, NOINVERT
+END
+
+
+/////////////////////////////////////////////////////////////////////////////
+//
+// DESIGNINFO
+//
+
+#ifdef APSTUDIO_INVOKED
+GUIDELINES DESIGNINFO DISCARDABLE 
+BEGIN
+    IDDIALOG_NewObject, DIALOG
+    BEGIN
+        LEFTMARGIN, 7
+        RIGHTMARGIN, 365
+        TOPMARGIN, 7
+        BOTTOMMARGIN, 224
+    END
+END
+#endif    // APSTUDIO_INVOKED
+
+#endif    // English (U.S.) resources
+/////////////////////////////////////////////////////////////////////////////
+
+
+
+#ifndef APSTUDIO_INVOKED
+/////////////////////////////////////////////////////////////////////////////
+//
+// Generated from the TEXTINCLUDE 3 resource.
+//
+
+
+/////////////////////////////////////////////////////////////////////////////
+#endif    // not APSTUDIO_INVOKED
+
