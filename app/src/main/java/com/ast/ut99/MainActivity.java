@@ -17,6 +17,7 @@ import android.view.Window;
 import android.view.WindowInsets;
 import android.view.WindowInsetsController;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
 import android.widget.ScrollView;
@@ -36,6 +37,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
@@ -52,9 +55,13 @@ import java.util.zip.ZipInputStream;
 public class MainActivity extends Activity {
     private static final int REQ_SELECT_UT99_FOLDER = 3001;
     private static final int REQ_SELECT_UT99_ZIP = 3002;
+    private static final String DEFAULT_ONLINE_ZIP_URL = "http://ouya.cweiske.de/apks/com.ast.ut99/UT99_v1.400.zip";
 
     private File selectedRoot;
     private String lastImportMessage;
+    private ProgressBar installProgressBar;
+    private TextView installProgressText;
+    private TextView installMessageText;
     private long launchRequestedAtMs;
     private boolean launchedLegacySafeMode;
 
@@ -222,6 +229,13 @@ public class MainActivity extends Activity {
         return model.contains("ouya") || manufacturer.contains("ouya") || product.contains("ouya");
     }
 
+    private boolean isOuyaDevice() {
+        String model = String.valueOf(Build.MODEL).toLowerCase(Locale.US);
+        String manufacturer = String.valueOf(Build.MANUFACTURER).toLowerCase(Locale.US);
+        String product = String.valueOf(Build.PRODUCT).toLowerCase(Locale.US);
+        return model.contains("ouya") || manufacturer.contains("ouya") || product.contains("ouya");
+    }
+
     private void hideSystemUi() {
         Window window = getWindow();
         if (window == null) return;
@@ -276,6 +290,7 @@ public class MainActivity extends Activity {
         body.setPadding(48, 36, 48, 36);
 
         final boolean hasLaunchData = selectedRoot != null && UT99Paths.hasLaunchableGameData(selectedRoot);
+        final boolean ouyaMode = isOuyaDevice();
 
         TextView title = new TextView(this);
         title.setText(hasLaunchData
@@ -295,6 +310,16 @@ public class MainActivity extends Activity {
             message.setText(t(
                     "Spieldaten gefunden unter:\n" + selectedRoot.getAbsolutePath() + extra,
                     "Game data found at:\n" + selectedRoot.getAbsolutePath() + extra));
+        } else if (ouyaMode) {
+            message.setText(t(
+                    "Es wurde kein vollständiger UT99-Datenordner gefunden.\n\n" +
+                            "Auf OUYA kannst du die Spieldaten direkt online herunterladen oder eine lokale ZIP-Datei importieren.\n\n" +
+                            "Installationsziel:\n" + UT99Paths.installRoot(this).getAbsolutePath() + "\n\n" +
+                            "Benötigt werden mindestens:\nSystem, Maps, Textures, Sounds, Music" + extra,
+                    "No complete UT99 data folder was found.\n\n" +
+                            "On OUYA you can download the game data directly or import a local ZIP file.\n\n" +
+                            "Install target:\n" + UT99Paths.installRoot(this).getAbsolutePath() + "\n\n" +
+                            "Required folders:\nSystem, Maps, Textures, Sounds, Music" + extra));
         } else {
             message.setText(t(
                     "Es wurde kein vollständiger UT99-Datenordner gefunden.\n\n" +
@@ -313,17 +338,52 @@ public class MainActivity extends Activity {
         message.setPadding(0, 24, 0, 24);
         body.addView(message);
 
+        Button firstFocusButton = null;
         if (hasLaunchData) {
-            body.addView(button(t("Unreal Tournament starten", "Start Unreal Tournament"), v -> launchGame(selectedRoot)));
+            firstFocusButton = button(t("Unreal Tournament starten", "Start Unreal Tournament"), v -> launchGame(selectedRoot));
+            body.addView(firstFocusButton);
         }
-        body.addView(button(t("UT99-Ordner auswählen", "Select UT99 folder"), v -> openFolderPicker()));
-        body.addView(button(t("UT99-ZIP auswählen", "Select UT99 ZIP"), v -> openZipPicker()));
-        body.addView(button(t("Erneut prüfen", "Check again"), v -> continueStartup()));
 
+        if (ouyaMode) {
+            Button onlineButton = button(t("Online-ZIP herunterladen", "Download online ZIP"), v -> showOnlineZipDialog());
+            body.addView(onlineButton);
+            if (firstFocusButton == null) firstFocusButton = onlineButton;
+
+            Button localZipButton = button(t("Lokales ZIP auswählen", "Select local ZIP"), v -> openZipPicker());
+            body.addView(localZipButton);
+            if (firstFocusButton == null) firstFocusButton = localZipButton;
+        } else {
+            Button folderButton = button(t("UT99-Ordner auswählen", "Select UT99 folder"), v -> openFolderPicker());
+            body.addView(folderButton);
+            if (firstFocusButton == null) firstFocusButton = folderButton;
+
+            Button zipButton = button(t("UT99-ZIP auswählen", "Select UT99 ZIP"), v -> openZipPicker());
+            body.addView(zipButton);
+            if (firstFocusButton == null) firstFocusButton = zipButton;
+        }
+
+        Button checkButton = button(t("Erneut prüfen", "Check again"), v -> continueStartup());
+        body.addView(checkButton);
+        if (firstFocusButton == null) firstFocusButton = checkButton;
+
+        final Button focusTarget = firstFocusButton;
         ScrollView scrollView = new ScrollView(this);
         scrollView.addView(body);
         setContentView(scrollView);
         hideSystemUi();
+        restoreControllerFocus(focusTarget);
+    }
+
+    private void restoreControllerFocus(final View focusTarget) {
+        if (focusTarget == null) return;
+        focusTarget.setFocusable(true);
+        focusTarget.setFocusableInTouchMode(true);
+        focusTarget.postDelayed(() -> {
+            try {
+                focusTarget.requestFocus();
+            } catch (Throwable ignored) {
+            }
+        }, 80L);
     }
 
     private void showBusyScreen(String titleText, String messageText) {
@@ -338,19 +398,51 @@ public class MainActivity extends Activity {
         title.setGravity(Gravity.CENTER);
         body.addView(title);
 
-        ProgressBar progressBar = new ProgressBar(this);
-        progressBar.setIndeterminate(true);
-        body.addView(progressBar);
+        installMessageText = new TextView(this);
+        installMessageText.setText(messageText);
+        installMessageText.setTextSize(16.0f);
+        installMessageText.setGravity(Gravity.CENTER);
+        installMessageText.setPadding(0, 24, 0, 16);
+        body.addView(installMessageText);
 
-        TextView message = new TextView(this);
-        message.setText(messageText);
-        message.setTextSize(16.0f);
-        message.setGravity(Gravity.CENTER);
-        message.setPadding(0, 24, 0, 0);
-        body.addView(message);
+        installProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        installProgressBar.setIndeterminate(false);
+        installProgressBar.setMax(100);
+        installProgressBar.setProgress(0);
+        int progressWidth = Math.max(240, getResources().getDisplayMetrics().widthPixels / 2);
+        LinearLayout.LayoutParams progressParams = new LinearLayout.LayoutParams(progressWidth, LinearLayout.LayoutParams.WRAP_CONTENT);
+        progressParams.gravity = Gravity.CENTER_HORIZONTAL;
+        body.addView(installProgressBar, progressParams);
+
+        installProgressText = new TextView(this);
+        installProgressText.setText("0%");
+        installProgressText.setTextSize(16.0f);
+        installProgressText.setGravity(Gravity.CENTER);
+        installProgressText.setPadding(0, 8, 0, 0);
+        body.addView(installProgressText);
 
         setContentView(body);
         hideSystemUi();
+    }
+
+    private void updateInstallMessage(final String message) {
+        runOnUiThread(() -> {
+            if (installMessageText != null) installMessageText.setText(message);
+        });
+    }
+
+    private void updateInstallProgress(final String phase, final int percent) {
+        final int safePercent = Math.max(0, Math.min(100, percent));
+        runOnUiThread(() -> {
+            if (installProgressBar != null) installProgressBar.setProgress(safePercent);
+            if (installProgressText != null) {
+                if (phase != null && phase.length() > 0) {
+                    installProgressText.setText(phase + " " + safePercent + "%");
+                } else {
+                    installProgressText.setText(safePercent + "%");
+                }
+            }
+        });
     }
 
     private void openFolderPicker() {
@@ -444,16 +536,17 @@ public class MainActivity extends Activity {
 
     private void installFromZip(final Uri zipUri) {
         showBusyScreen(t("Installiere UT99-Daten", "Installing UT99 data"),
-                t("ZIP wird entpackt …", "Extracting ZIP …"));
+                t("ZIP wird vorbereitet …", "Preparing ZIP …"));
         new Thread(() -> {
             final String result;
             try {
-                InstallStats stats = importZip(zipUri, UT99Paths.installRoot(this));
+                InstallStats stats = importZip(zipUri, UT99Paths.installRoot(this), (phase, percent) -> updateInstallProgress(phase, percent));
                 result = t("ZIP-Import abgeschlossen: ", "ZIP import complete: ") + stats.files + " files";
             } catch (Throwable ex) {
                 android.util.Log.e("UT99Installer", "zip import failed", ex);
+                final String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
                 runOnUiThread(() -> {
-                    lastImportMessage = t("ZIP-Import fehlgeschlagen: ", "ZIP import failed: ") + ex.getMessage();
+                    lastImportMessage = t("ZIP-Import fehlgeschlagen: ", "ZIP import failed: ") + msg;
                     showMissingDataScreen();
                 });
                 return;
@@ -464,6 +557,159 @@ public class MainActivity extends Activity {
                 continueStartup();
             });
         }, "UT99ZipInstaller").start();
+    }
+
+    private void showOnlineZipDialog() {
+        final EditText input = new EditText(this);
+        input.setSingleLine(true);
+        input.setText(DEFAULT_ONLINE_ZIP_URL);
+        input.setSelectAllOnFocus(false);
+        input.setSelection(input.getText().length());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(t("Online-ZIP herunterladen", "Download online ZIP"))
+                .setMessage(t("Download-URL:", "Download URL:"))
+                .setView(input)
+                .setPositiveButton(t("Download starten", "Start download"), (d, which) -> {
+                    String url = input.getText() != null ? input.getText().toString().trim() : "";
+                    if (url.length() == 0) {
+                        lastImportMessage = t("Keine Download-URL eingegeben.", "No download URL entered.");
+                        showMissingDataScreen();
+                        return;
+                    }
+                    installFromOnlineZip(url);
+                })
+                .setNegativeButton(t("Abbrechen", "Cancel"), (d, which) -> showMissingDataScreen())
+                .create();
+
+        dialog.setOnCancelListener(d -> showMissingDataScreen());
+        dialog.setOnShowListener(d -> {
+            try {
+                Button positive = dialog.getButton(AlertDialog.BUTTON_POSITIVE);
+                if (positive != null) {
+                    positive.setFocusable(true);
+                    positive.requestFocus();
+                }
+            } catch (Throwable ignored) {
+            }
+        });
+        dialog.show();
+    }
+
+    private void installFromOnlineZip(final String urlText) {
+        showBusyScreen(t("Installiere UT99-Daten", "Installing UT99 data"),
+                t("Online-ZIP wird heruntergeladen …", "Downloading online ZIP …"));
+        new Thread(() -> {
+            File tmp = null;
+            final String result;
+            try {
+                tmp = File.createTempFile("ut99-online-import", ".zip", getCacheDir());
+                updateInstallMessage(t("Online-ZIP wird heruntergeladen …", "Downloading online ZIP …"));
+                downloadOnlineZipToFile(urlText, tmp);
+                if (!looksLikeZipFile(tmp)) {
+                    throw new IOException("Downloaded file is not a ZIP archive. Check the URL or server redirect.");
+                }
+                updateInstallMessage(t("ZIP wird entpackt und geprüft …", "Extracting and verifying ZIP …"));
+                InstallStats stats = extractZipFile(tmp, UT99Paths.installRoot(this), (phase, percent) -> updateInstallProgress(phase, percent));
+                result = t("Online-ZIP-Import abgeschlossen: ", "Online ZIP import complete: ") + stats.files + " files";
+            } catch (Throwable ex) {
+                android.util.Log.e("UT99Installer", "online zip import failed", ex);
+                final String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
+                runOnUiThread(() -> {
+                    lastImportMessage = t("Online-ZIP-Import fehlgeschlagen: ", "Online ZIP import failed: ") + msg;
+                    showMissingDataScreen();
+                });
+                if (tmp != null && tmp.exists() && !tmp.delete()) tmp.deleteOnExit();
+                return;
+            }
+
+            if (tmp != null && tmp.exists() && !tmp.delete()) tmp.deleteOnExit();
+            runOnUiThread(() -> {
+                lastImportMessage = result;
+                Toast.makeText(this, result, Toast.LENGTH_LONG).show();
+                continueStartup();
+            });
+        }, "UT99OnlineZipInstaller").start();
+    }
+
+    private void downloadOnlineZipToFile(String urlText, File outFile) throws IOException {
+        URL url = new URL(urlText);
+        for (int redirect = 0; redirect < 5; redirect++) {
+            String protocol = url.getProtocol();
+            if (protocol == null) throw new IOException("Download URL has no protocol.");
+            protocol = protocol.toLowerCase(Locale.US);
+            if (!"http".equals(protocol) && !"https".equals(protocol)) {
+                throw new IOException("Only HTTP/HTTPS URLs are supported.");
+            }
+            if (isOuyaDevice() && "https".equals(protocol)) {
+                throw new IOException("OUYA cannot download HTTPS URLs. Use a direct HTTP URL without HTTPS redirect.");
+            }
+
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setConnectTimeout(20000);
+            connection.setReadTimeout(60000);
+            connection.setInstanceFollowRedirects(false);
+            connection.setRequestProperty("User-Agent", "UT99-Android-Installer/1.7.1");
+            connection.connect();
+
+            int code = connection.getResponseCode();
+            if (code >= 300 && code < 400) {
+                String location = connection.getHeaderField("Location");
+                connection.disconnect();
+                if (location == null || location.trim().length() == 0) {
+                    throw new IOException("Server redirected without Location header.");
+                }
+                URL next = new URL(url, location);
+                String nextProtocol = next.getProtocol() != null ? next.getProtocol().toLowerCase(Locale.US) : "";
+                if (isOuyaDevice() && "https".equals(nextProtocol)) {
+                    throw new IOException("Server redirects to HTTPS, which OUYA cannot download. Use a direct HTTP mirror.");
+                }
+                url = next;
+                continue;
+            }
+
+            if (code < 200 || code >= 300) {
+                connection.disconnect();
+                throw new IOException("HTTP error " + code + " while downloading ZIP.");
+            }
+
+            long totalBytes = connection.getContentLength();
+            InputStream input = connection.getInputStream();
+            try {
+                FileOutputStream output = new FileOutputStream(outFile, false);
+                try {
+                    copyWithProgress(input, output, totalBytes, t("Download", "Download"), 0, 45);
+                } finally {
+                    output.close();
+                }
+            } finally {
+                input.close();
+                connection.disconnect();
+            }
+            if (outFile.length() <= 0) throw new IOException("Downloaded file is empty.");
+            updateInstallProgress(t("Download", "Download"), 45);
+            return;
+        }
+        throw new IOException("Too many redirects while downloading ZIP.");
+    }
+
+    private boolean looksLikeZipFile(File file) {
+        if (file == null || !file.exists() || file.length() < 4) return false;
+        FileInputStream in = null;
+        try {
+            in = new FileInputStream(file);
+            int b0 = in.read();
+            int b1 = in.read();
+            int b2 = in.read();
+            int b3 = in.read();
+            return b0 == 'P' && b1 == 'K' && (b2 == 3 || b2 == 5 || b2 == 7) && (b3 == 4 || b3 == 6 || b3 == 8);
+        } catch (Throwable ignored) {
+            return false;
+        } finally {
+            if (in != null) {
+                try { in.close(); } catch (IOException ignored) {}
+            }
+        }
     }
 
     private File legacyStartDir() {
@@ -620,16 +866,17 @@ public class MainActivity extends Activity {
 
     private void installFromLegacyZipFile(final File zipFile) {
         showBusyScreen(t("Installiere UT99-Daten", "Installing UT99 data"),
-                t("ZIP wird entpackt …", "Extracting ZIP …"));
+                t("ZIP wird vorbereitet …", "Preparing ZIP …"));
         new Thread(() -> {
             final String result;
             try {
-                InstallStats stats = importZipFile(zipFile, UT99Paths.installRoot(this));
+                InstallStats stats = importZipFile(zipFile, UT99Paths.installRoot(this), (phase, percent) -> updateInstallProgress(phase, percent));
                 result = t("ZIP-Import abgeschlossen: ", "ZIP import complete: ") + stats.files + " files";
             } catch (Throwable ex) {
                 android.util.Log.e("UT99Installer", "legacy zip import failed", ex);
+                final String msg = ex.getMessage() != null ? ex.getMessage() : ex.toString();
                 runOnUiThread(() -> {
-                    lastImportMessage = t("ZIP-Import fehlgeschlagen: ", "ZIP import failed: ") + ex.getMessage();
+                    lastImportMessage = t("ZIP-Import fehlgeschlagen: ", "ZIP import failed: ") + msg;
                     showMissingDataScreen();
                 });
                 return;
@@ -753,10 +1000,14 @@ public class MainActivity extends Activity {
     }
 
     private InstallStats importZipFile(File zipFile, File targetRoot) throws IOException {
+        return importZipFile(zipFile, targetRoot, null);
+    }
+
+    private InstallStats importZipFile(File zipFile, File targetRoot, ProgressCallback progress) throws IOException {
         if (zipFile == null || !zipFile.exists() || !zipFile.isFile()) {
             throw new IOException("Selected ZIP does not exist.");
         }
-        return extractZipFile(zipFile, targetRoot);
+        return extractZipFile(zipFile, targetRoot, progress);
     }
 
     private InstallStats importFolderTree(Uri treeUri, File targetRoot) throws IOException {
@@ -865,6 +1116,10 @@ public class MainActivity extends Activity {
     }
 
     private InstallStats importZip(Uri zipUri, File targetRoot) throws IOException {
+        return importZip(zipUri, targetRoot, null);
+    }
+
+    private InstallStats importZip(Uri zipUri, File targetRoot, ProgressCallback progress) throws IOException {
         File tmp = File.createTempFile("ut99-import", ".zip", getCacheDir());
         try {
             InputStream in = getContentResolver().openInputStream(zipUri);
@@ -872,20 +1127,27 @@ public class MainActivity extends Activity {
             try {
                 FileOutputStream out = new FileOutputStream(tmp, false);
                 try {
-                    copy(in, out);
+                    copyWithProgress(in, out, -1, t("ZIP lesen", "Reading ZIP"), 0, 10);
                 } finally {
                     out.close();
                 }
             } finally {
                 in.close();
             }
-            return extractZipFile(tmp, targetRoot);
+            if (!looksLikeZipFile(tmp)) {
+                throw new IOException("Selected file is not a ZIP archive.");
+            }
+            return extractZipFile(tmp, targetRoot, progress);
         } finally {
             if (!tmp.delete()) tmp.deleteOnExit();
         }
     }
 
     private InstallStats extractZipFile(File zipSource, File targetRoot) throws IOException {
+        return extractZipFile(zipSource, targetRoot, null);
+    }
+
+    private InstallStats extractZipFile(File zipSource, File targetRoot, ProgressCallback progress) throws IOException {
         UT99Paths.ensureSkeleton(targetRoot);
 
         String prefix;
@@ -899,15 +1161,48 @@ public class MainActivity extends Activity {
             throw new IOException("ZIP does not contain System, Maps, Textures, Sounds and Music.");
         }
 
+        File stagingRoot = new File(getCacheDir(), "ut99-extract-" + android.os.SystemClock.uptimeMillis());
+        File stagingData = new File(stagingRoot, "UT99");
         InstallStats stats = new InstallStats();
+        try {
+            if (!stagingData.mkdirs() && !stagingData.isDirectory()) {
+                throw new IOException("Cannot create temporary install folder.");
+            }
+            extractZipFileDirect(zipSource, stagingData, prefix, stats, progress);
+            if (!UT99Paths.hasUsableGameData(stagingData)) {
+                throw new IOException("ZIP extracted to temporary folder, but required UT99 files were not found. Extracted files=" + stats.files + ", bytes=" + stats.bytes);
+            }
+            if (progress != null) progress.onProgress(t("Kopieren", "Copying"), 90);
+            replaceDirectoryContents(stagingData, targetRoot);
+            if (progress != null) progress.onProgress(t("Fertig", "Done"), 100);
+        } finally {
+            deleteRecursive(stagingRoot);
+        }
+
+        if (!UT99Paths.hasUsableGameData(targetRoot)) {
+            throw new IOException("ZIP copied, but required UT99 files were not found in " + targetRoot.getAbsolutePath());
+        }
+        return stats;
+    }
+
+    private void extractZipFileDirect(File zipSource, File targetRoot, String prefix, InstallStats stats, ProgressCallback progress) throws IOException {
+        final int totalExtractFiles = countExtractableZipFiles(zipSource, prefix);
+        if (progress != null) progress.onProgress(t("Installation", "Installing"), 45);
+
         ZipInputStream zipInput = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipSource)));
         try {
             ZipEntry entry;
             while ((entry = zipInput.getNextEntry()) != null) {
                 String name = normalizeZipName(entry.getName());
-                if (name.length() == 0 || !name.startsWith(prefix)) continue;
+                if (name.length() == 0 || !name.startsWith(prefix)) {
+                    zipInput.closeEntry();
+                    continue;
+                }
                 String relative = name.substring(prefix.length());
-                if (relative.length() == 0 || shouldSkipZipEntry(relative)) continue;
+                if (relative.length() == 0 || shouldSkipZipEntry(relative)) {
+                    zipInput.closeEntry();
+                    continue;
+                }
 
                 File out = safeZipOutputFile(targetRoot, relative);
                 if (entry.isDirectory() || relative.endsWith("/")) {
@@ -919,6 +1214,10 @@ public class MainActivity extends Activity {
                     try {
                         stats.bytes += copy(zipInput, fileOut);
                         stats.files++;
+                        if (progress != null && totalExtractFiles > 0) {
+                            int percent = 45 + (int) Math.min(45, (stats.files * 45L) / totalExtractFiles);
+                            progress.onProgress(t("Installation", "Installing"), percent);
+                        }
                     } finally {
                         fileOut.close();
                     }
@@ -928,11 +1227,53 @@ public class MainActivity extends Activity {
         } finally {
             zipInput.close();
         }
+    }
 
-        if (!UT99Paths.hasUsableGameData(targetRoot)) {
-            throw new IOException("ZIP extracted, but required UT99 files were not found in " + targetRoot.getAbsolutePath());
+    private int countExtractableZipFiles(File zipSource, String prefix) throws IOException {
+        int count = 0;
+        ZipFile zipFile = new ZipFile(zipSource);
+        try {
+            java.util.Enumeration<? extends ZipEntry> entries = zipFile.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                String name = normalizeZipName(entry.getName());
+                if (name.length() == 0 || !name.startsWith(prefix)) continue;
+                String relative = name.substring(prefix.length());
+                if (relative.length() == 0 || shouldSkipZipEntry(relative)) continue;
+                if (!entry.isDirectory() && !relative.endsWith("/")) count++;
+            }
+        } finally {
+            zipFile.close();
         }
-        return stats;
+        return count;
+    }
+
+    private void replaceDirectoryContents(File sourceDir, File targetDir) throws IOException {
+        if (sourceDir == null || !sourceDir.isDirectory()) throw new IOException("Source folder is not readable.");
+        if (!targetDir.exists() && !targetDir.mkdirs()) throw new IOException("Cannot create " + targetDir.getAbsolutePath());
+        clearDirectory(targetDir);
+        copyLegacyChildren(sourceDir, targetDir, targetDir, new InstallStats());
+    }
+
+    private void clearDirectory(File dir) throws IOException {
+        File[] children = dir.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            deleteRecursive(child);
+        }
+    }
+
+    private void deleteRecursive(File file) throws IOException {
+        if (file == null || !file.exists()) return;
+        if (file.isDirectory()) {
+            File[] children = file.listFiles();
+            if (children != null) {
+                for (File child : children) deleteRecursive(child);
+            }
+        }
+        if (!file.delete() && file.exists()) {
+            throw new IOException("Cannot delete " + file.getAbsolutePath());
+        }
     }
 
     private String findZipGameDataPrefix(ZipFile zipFile) throws IOException {
@@ -1004,15 +1345,34 @@ public class MainActivity extends Activity {
     }
 
     private long copy(InputStream input, FileOutputStream output) throws IOException {
+        return copyWithProgress(input, output, -1, null, 0, 0);
+    }
+
+    private long copyWithProgress(InputStream input, FileOutputStream output, long totalBytes, String phase, int startPercent, int spanPercent) throws IOException {
         byte[] buffer = new byte[128 * 1024];
         long total = 0;
         int read;
+        int lastPercent = -1;
         while ((read = input.read(buffer)) != -1) {
             output.write(buffer, 0, read);
             total += read;
+            if (phase != null && totalBytes > 0 && spanPercent > 0) {
+                int percent = startPercent + (int) Math.min(spanPercent, (total * spanPercent) / totalBytes);
+                if (percent != lastPercent) {
+                    lastPercent = percent;
+                    updateInstallProgress(phase, percent);
+                }
+            }
         }
         output.flush();
+        if (phase != null && spanPercent > 0 && totalBytes > 0) {
+            updateInstallProgress(phase, startPercent + spanPercent);
+        }
         return total;
+    }
+
+    private interface ProgressCallback {
+        void onProgress(String phase, int percent);
     }
 
     private static final class LegacyChoice {
