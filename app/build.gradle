@@ -6,6 +6,13 @@ android {
     namespace 'com.ast.ut99'
     compileSdk 33
 
+    buildTypes {
+        release {
+            minifyEnabled false
+            shrinkResources false
+        }
+    }
+
     defaultConfig {
         applicationId 'com.ast.ut99'
         minSdk 16          // Android 4.1.2 / OUYA
