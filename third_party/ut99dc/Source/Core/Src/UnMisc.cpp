@@ -9,6 +9,38 @@
 // Core includes.
 #include "CorePrivate.h"
 
+#if defined(PLATFORM_ANDROID)
+static UBOOL appAndroidIsRussianLanguageExt( const TCHAR* LangExt )
+{
+	if( !LangExt )
+		return 0;
+
+	while( *LangExt==' ' || *LangExt=='\t' || *LangExt=='\"' )
+		LangExt++;
+
+	TCHAR Value[32];
+	appStrncpy( Value, LangExt, ARRAY_COUNT(Value) );
+	Value[ARRAY_COUNT(Value)-1] = 0;
+
+	INT Len = appStrlen( Value );
+	while( Len>0 && (Value[Len-1]==' ' || Value[Len-1]=='\t' || Value[Len-1]=='\"') )
+		Value[--Len] = 0;
+
+	for( INT i=0; Value[i]; i++ )
+	{
+		if( Value[i]=='-' )
+			Value[i]='_';
+	}
+
+	return appStricmp(Value,TEXT("ru"))==0
+		|| appStricmp(Value,TEXT("rus"))==0
+		|| appStricmp(Value,TEXT("rut"))==0
+		|| appStrnicmp(Value,TEXT("ru_"),3)==0
+		|| appStrnicmp(Value,TEXT("rus_"),4)==0
+		|| appStrnicmp(Value,TEXT("rut_"),4)==0;
+}
+#endif
+
 /*-----------------------------------------------------------------------------
 	FOutputDevice implementation.
 -----------------------------------------------------------------------------*/
@@ -1751,7 +1783,20 @@ CORE_API void appInit( const TCHAR* InPackage, const TCHAR* InCmdLine, FMalloc* 
 	// Language.
 	TCHAR Temp[256];
 	if( GConfig->GetString( TEXT("Engine.Engine"), TEXT("Language"), Temp, ARRAY_COUNT(Temp) ) )
+	{
+#if defined(PLATFORM_ANDROID)
+		// UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE:
+		// Russian UT99 data sets can request rut/ru/rus localization, but this
+		// Android build ships English Android-specific menu/key-label overrides.
+		// Fall back to INT so Russian device/data settings keep the game in English.
+		if( appAndroidIsRussianLanguageExt( Temp ) )
+		{
+			debugf( NAME_Init, TEXT("Android Russian Language=%s normalized to int"), Temp );
+			appStrcpy( Temp, TEXT("int") );
+		}
+#endif
 		UObject::SetLanguage( Temp );
+	}
 
 	// Object initialization.
 	UObject::StaticInit();

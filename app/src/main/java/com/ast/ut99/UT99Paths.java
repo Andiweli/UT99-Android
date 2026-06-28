@@ -562,6 +562,7 @@ final class UT99Paths {
             writeUtf8(userIni, buildAndroidUserIni());
             created = true;
         }
+        ensureAndroidEnglishLanguageConfig(system);
         ensureAndroidLeanMenuConfig(system);
         ensureAndroidControllerBindingConfig(system); // UT99_ANDROID_CONTROLLER_BINDING_FIX_V117
         ensureAndroidControllerFriendlyKeyNames(system); // UT99_ANDROID_CONTROLLER_KEY_NAMES_V118
@@ -848,6 +849,112 @@ final class UT99Paths {
                 Log.i(TAG, "UT99_ANDROID_V159_WIDESCREEN_FOV_DEFAULT added " + name + "=" + valueToAdd);
             }
         }
+    }
+
+    private static void ensureAndroidEnglishLanguageConfig(File systemDir) throws IOException {
+        if (systemDir == null) return;
+
+        // UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE:
+        // Some Russian UT99 data sets or older Android config migrations can carry
+        // Language=rut/ru/rus into the active INI. The Android package only ships
+        // the English Android menu/key-label overrides, so normalize Russian
+        // language values back to INT while leaving other explicit user choices
+        // untouched.
+        String[] names = {"AndroidUT99.ini", "Default.ini", "UnrealTournament.ini", "DCUtil.ini", "DefaultDCUtil.ini"};
+        for (String name : names) {
+            File ini = new File(systemDir, name);
+            if (!ini.isFile() || ini.length() == 0L) continue;
+
+            String text = readUtf8(ini);
+            String updated = ensureEnglishForRussianLanguageValue(text);
+            if (!updated.equals(text)) {
+                writeUtf8(ini, updated);
+                Log.i(TAG, "UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE normalized " + name + " Language=int");
+            }
+        }
+    }
+
+    private static String ensureEnglishForRussianLanguageValue(String text) {
+        if (text == null) text = "";
+        String section = "[Engine.Engine]";
+        String[] lines = text.split("\\r?\\n", -1);
+        StringBuilder out = new StringBuilder(text.length() + 64);
+        boolean inEngineSection = false;
+        boolean sawEngineSection = false;
+        boolean foundLanguageInEngineSection = false;
+        boolean changed = false;
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmed = line.trim();
+            if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+                if (inEngineSection && !foundLanguageInEngineSection) {
+                    out.append("Language=int\n");
+                    foundLanguageInEngineSection = true;
+                    changed = true;
+                }
+                inEngineSection = "[engine.engine]".equalsIgnoreCase(trimmed);
+                if (inEngineSection) {
+                    sawEngineSection = true;
+                }
+            }
+
+            if (inEngineSection && isLanguageLine(trimmed)) {
+                foundLanguageInEngineSection = true;
+                String value = trimmed.substring(trimmed.indexOf('=') + 1).trim();
+                if (isRussianLanguageValue(value)) {
+                    line = "Language=int";
+                    changed = true;
+                }
+            }
+
+            out.append(line);
+            if (i < lines.length - 1) out.append('\n');
+        }
+
+        if (inEngineSection && !foundLanguageInEngineSection) {
+            String updated = out.toString();
+            if (updated.length() > 0 && !updated.endsWith("\n")) updated += "\n";
+            updated += "Language=int\n";
+            return updated;
+        }
+
+        if (!sawEngineSection) {
+            if (text.length() == 0) {
+                return section + "\nLanguage=int\n";
+            }
+            String updated = out.toString();
+            if (updated.length() > 0 && !updated.endsWith("\n")) updated += "\n";
+            updated += "\n; UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE\n" + section + "\nLanguage=int\n";
+            return updated;
+        }
+
+        return changed ? out.toString() : text;
+    }
+
+    private static boolean isLanguageLine(String trimmed) {
+        return java.util.regex.Pattern
+                .compile("(?i)^Language\\s*=.*$")
+                .matcher(trimmed).find();
+    }
+
+    private static boolean isRussianLanguageValue(String value) {
+        if (value == null) return false;
+        String normalized = value.trim().toLowerCase(java.util.Locale.US);
+        int comment = normalized.indexOf(';');
+        if (comment >= 0) normalized = normalized.substring(0, comment).trim();
+        comment = normalized.indexOf('#');
+        if (comment >= 0) normalized = normalized.substring(0, comment).trim();
+        while (normalized.startsWith("\"") && normalized.endsWith("\"") && normalized.length() >= 2) {
+            normalized = normalized.substring(1, normalized.length() - 1).trim();
+        }
+        normalized = normalized.replace('-', '_');
+        return "ru".equals(normalized)
+                || "rus".equals(normalized)
+                || "rut".equals(normalized)
+                || normalized.startsWith("ru_")
+                || normalized.startsWith("rus_")
+                || normalized.startsWith("rut_");
     }
 
     private static void ensureAndroidLeanMenuConfig(File systemDir) throws IOException {
