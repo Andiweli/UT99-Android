@@ -30,6 +30,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.PushbackInputStream;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -40,7 +41,6 @@ import java.util.Set;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.util.zip.ZipEntry;
-import java.util.zip.ZipFile;
 import java.util.zip.ZipInputStream;
 
 /**
@@ -536,7 +536,7 @@ public class MainActivity extends Activity {
 
     private void installFromZip(final Uri zipUri) {
         showBusyScreen(t("Installiere UT99-Daten", "Installing UT99 data"),
-                t("ZIP wird vorbereitet …", "Preparing ZIP …"));
+                t("ZIP wird direkt entpackt …", "Extracting ZIP directly …"));
         new Thread(() -> {
             final String result;
             try {
@@ -598,19 +598,12 @@ public class MainActivity extends Activity {
 
     private void installFromOnlineZip(final String urlText) {
         showBusyScreen(t("Installiere UT99-Daten", "Installing UT99 data"),
-                t("Online-ZIP wird heruntergeladen …", "Downloading online ZIP …"));
+                t("Online-ZIP wird gestreamt und entpackt …", "Streaming and extracting online ZIP …"));
         new Thread(() -> {
-            File tmp = null;
             final String result;
             try {
-                tmp = File.createTempFile("ut99-online-import", ".zip", getCacheDir());
-                updateInstallMessage(t("Online-ZIP wird heruntergeladen …", "Downloading online ZIP …"));
-                downloadOnlineZipToFile(urlText, tmp);
-                if (!looksLikeZipFile(tmp)) {
-                    throw new IOException("Downloaded file is not a ZIP archive. Check the URL or server redirect.");
-                }
-                updateInstallMessage(t("ZIP wird entpackt und geprüft …", "Extracting and verifying ZIP …"));
-                InstallStats stats = extractZipFile(tmp, UT99Paths.installRoot(this), (phase, percent) -> updateInstallProgress(phase, percent));
+                updateInstallMessage(t("Online-ZIP wird direkt ins Ziel-Staging entpackt …", "Online ZIP is being extracted directly into target staging …"));
+                InstallStats stats = importOnlineZip(urlText, UT99Paths.installRoot(this), (phase, percent) -> updateInstallProgress(phase, percent));
                 result = t("Online-ZIP-Import abgeschlossen: ", "Online ZIP import complete: ") + stats.files + " files";
             } catch (Throwable ex) {
                 android.util.Log.e("UT99Installer", "online zip import failed", ex);
@@ -619,11 +612,9 @@ public class MainActivity extends Activity {
                     lastImportMessage = t("Online-ZIP-Import fehlgeschlagen: ", "Online ZIP import failed: ") + msg;
                     showMissingDataScreen();
                 });
-                if (tmp != null && tmp.exists() && !tmp.delete()) tmp.deleteOnExit();
                 return;
             }
 
-            if (tmp != null && tmp.exists() && !tmp.delete()) tmp.deleteOnExit();
             runOnUiThread(() -> {
                 lastImportMessage = result;
                 Toast.makeText(this, result, Toast.LENGTH_LONG).show();
@@ -632,7 +623,7 @@ public class MainActivity extends Activity {
         }, "UT99OnlineZipInstaller").start();
     }
 
-    private void downloadOnlineZipToFile(String urlText, File outFile) throws IOException {
+    private InstallStats importOnlineZip(String urlText, File targetRoot, ProgressCallback progress) throws IOException {
         URL url = new URL(urlText);
         for (int redirect = 0; redirect < 5; redirect++) {
             String protocol = url.getProtocol();
@@ -649,7 +640,7 @@ public class MainActivity extends Activity {
             connection.setConnectTimeout(20000);
             connection.setReadTimeout(60000);
             connection.setInstanceFollowRedirects(false);
-            connection.setRequestProperty("User-Agent", "UT99-Android-Installer/1.7.1");
+            connection.setRequestProperty("User-Agent", "UT99-Android-Installer/1.7.3-streaming");
             connection.connect();
 
             int code = connection.getResponseCode();
@@ -676,40 +667,15 @@ public class MainActivity extends Activity {
             long totalBytes = connection.getContentLength();
             InputStream input = connection.getInputStream();
             try {
-                FileOutputStream output = new FileOutputStream(outFile, false);
-                try {
-                    copyWithProgress(input, output, totalBytes, t("Download", "Download"), 0, 45);
-                } finally {
-                    output.close();
-                }
+                if (progress != null) progress.onProgress(t("Download/Installation", "Download/installation"), 1);
+                return extractZipStream(input, targetRoot, progress, totalBytes,
+                        t("Download/Installation", "Download/installation"));
             } finally {
-                input.close();
+                try { input.close(); } catch (IOException ignored) {}
                 connection.disconnect();
             }
-            if (outFile.length() <= 0) throw new IOException("Downloaded file is empty.");
-            updateInstallProgress(t("Download", "Download"), 45);
-            return;
         }
         throw new IOException("Too many redirects while downloading ZIP.");
-    }
-
-    private boolean looksLikeZipFile(File file) {
-        if (file == null || !file.exists() || file.length() < 4) return false;
-        FileInputStream in = null;
-        try {
-            in = new FileInputStream(file);
-            int b0 = in.read();
-            int b1 = in.read();
-            int b2 = in.read();
-            int b3 = in.read();
-            return b0 == 'P' && b1 == 'K' && (b2 == 3 || b2 == 5 || b2 == 7) && (b3 == 4 || b3 == 6 || b3 == 8);
-        } catch (Throwable ignored) {
-            return false;
-        } finally {
-            if (in != null) {
-                try { in.close(); } catch (IOException ignored) {}
-            }
-        }
     }
 
     private File legacyStartDir() {
@@ -866,7 +832,7 @@ public class MainActivity extends Activity {
 
     private void installFromLegacyZipFile(final File zipFile) {
         showBusyScreen(t("Installiere UT99-Daten", "Installing UT99 data"),
-                t("ZIP wird vorbereitet …", "Preparing ZIP …"));
+                t("ZIP wird direkt entpackt …", "Extracting ZIP directly …"));
         new Thread(() -> {
             final String result;
             try {
@@ -1007,7 +973,12 @@ public class MainActivity extends Activity {
         if (zipFile == null || !zipFile.exists() || !zipFile.isFile()) {
             throw new IOException("Selected ZIP does not exist.");
         }
-        return extractZipFile(zipFile, targetRoot, progress);
+        FileInputStream input = new FileInputStream(zipFile);
+        try {
+            return extractZipStream(input, targetRoot, progress, zipFile.length(), t("ZIP-Installation", "ZIP installation"));
+        } finally {
+            try { input.close(); } catch (IOException ignored) {}
+        }
     }
 
     private InstallStats importFolderTree(Uri treeUri, File targetRoot) throws IOException {
@@ -1120,139 +1091,240 @@ public class MainActivity extends Activity {
     }
 
     private InstallStats importZip(Uri zipUri, File targetRoot, ProgressCallback progress) throws IOException {
-        File tmp = File.createTempFile("ut99-import", ".zip", getCacheDir());
+        InputStream input = getContentResolver().openInputStream(zipUri);
+        if (input == null) throw new IOException("Cannot open selected ZIP.");
         try {
-            InputStream in = getContentResolver().openInputStream(zipUri);
-            if (in == null) throw new IOException("Cannot open selected ZIP.");
-            try {
-                FileOutputStream out = new FileOutputStream(tmp, false);
-                try {
-                    copyWithProgress(in, out, -1, t("ZIP lesen", "Reading ZIP"), 0, 10);
-                } finally {
-                    out.close();
-                }
-            } finally {
-                in.close();
-            }
-            if (!looksLikeZipFile(tmp)) {
-                throw new IOException("Selected file is not a ZIP archive.");
-            }
-            return extractZipFile(tmp, targetRoot, progress);
+            return extractZipStream(input, targetRoot, progress, -1L, t("ZIP-Installation", "ZIP installation"));
         } finally {
-            if (!tmp.delete()) tmp.deleteOnExit();
+            try { input.close(); } catch (IOException ignored) {}
         }
     }
 
-    private InstallStats extractZipFile(File zipSource, File targetRoot) throws IOException {
-        return extractZipFile(zipSource, targetRoot, null);
-    }
-
-    private InstallStats extractZipFile(File zipSource, File targetRoot, ProgressCallback progress) throws IOException {
+    private InstallStats extractZipStream(InputStream rawInput, File targetRoot, ProgressCallback progress,
+                                          long totalCompressedBytes, String progressPhase) throws IOException {
+        if (rawInput == null) throw new IOException("ZIP stream is not readable.");
         UT99Paths.ensureSkeleton(targetRoot);
 
-        String prefix;
-        ZipFile zipFile = new ZipFile(zipSource);
-        try {
-            prefix = findZipGameDataPrefix(zipFile);
-        } finally {
-            zipFile.close();
-        }
-        if (prefix == null) {
-            throw new IOException("ZIP does not contain System, Maps, Textures, Sounds and Music.");
-        }
-
-        File stagingRoot = new File(getCacheDir(), "ut99-extract-" + android.os.SystemClock.uptimeMillis());
-        File stagingData = new File(stagingRoot, "UT99");
+        File stagingData = createTargetSiblingStagingData(targetRoot);
+        File stagingRoot = stagingData.getParentFile();
         InstallStats stats = new InstallStats();
+        boolean replaced = false;
         try {
-            if (!stagingData.mkdirs() && !stagingData.isDirectory()) {
-                throw new IOException("Cannot create temporary install folder.");
+            if (progress != null) progress.onProgress(t("ZIP prüfen", "Checking ZIP"), 3);
+
+            CountingInputStream countingInput = new CountingInputStream(rawInput);
+            InputStream checkedInput = checkedZipInputStream(countingInput);
+            ZipInputStream zipInput = new ZipInputStream(checkedInput);
+            try {
+                extractZipStreamDirect(zipInput, stagingData, stats, progress,
+                        countingInput, totalCompressedBytes, progressPhase);
+            } finally {
+                zipInput.close();
             }
-            extractZipFileDirect(zipSource, stagingData, prefix, stats, progress);
+
+            if (stats.files <= 0) {
+                throw new IOException("ZIP did not contain extractable UT99 files.");
+            }
+
+            UT99Paths.normalizeInstalledDataRoot(stagingData);
             if (!UT99Paths.hasUsableGameData(stagingData)) {
-                throw new IOException("ZIP extracted to temporary folder, but required UT99 files were not found. Extracted files=" + stats.files + ", bytes=" + stats.bytes);
+                throw new IOException("ZIP extracted to temporary target folder, but required UT99 files were not found. Extracted files=" + stats.files + ", bytes=" + stats.bytes);
             }
-            if (progress != null) progress.onProgress(t("Kopieren", "Copying"), 90);
-            replaceDirectoryContents(stagingData, targetRoot);
+
+            if (progress != null) progress.onProgress(t("Aktivieren", "Activating"), 92);
+            replaceTargetWithStagedData(stagingData, targetRoot);
+            replaced = true;
             if (progress != null) progress.onProgress(t("Fertig", "Done"), 100);
         } finally {
-            deleteRecursive(stagingRoot);
+            if (!replaced) {
+                deleteRecursive(stagingRoot);
+            } else if (stagingRoot != null && stagingRoot.exists()) {
+                deleteRecursive(stagingRoot);
+            }
         }
 
+        UT99Paths.normalizeInstalledDataRoot(targetRoot);
         if (!UT99Paths.hasUsableGameData(targetRoot)) {
-            throw new IOException("ZIP copied, but required UT99 files were not found in " + targetRoot.getAbsolutePath());
+            throw new IOException("ZIP installed, but required UT99 files were not found in " + targetRoot.getAbsolutePath());
         }
         return stats;
     }
 
-    private void extractZipFileDirect(File zipSource, File targetRoot, String prefix, InstallStats stats, ProgressCallback progress) throws IOException {
-        final int totalExtractFiles = countExtractableZipFiles(zipSource, prefix);
-        if (progress != null) progress.onProgress(t("Installation", "Installing"), 45);
+    private void extractZipStreamDirect(ZipInputStream zipInput, File targetRoot, InstallStats stats,
+                                        ProgressCallback progress, CountingInputStream countingInput,
+                                        long totalCompressedBytes, String progressPhase) throws IOException {
+        String prefix = null;
+        String prefixLower = null;
+        int lastPercent = -1;
+        if (progress != null) progress.onProgress(t("Installation", "Installing"), 5);
 
-        ZipInputStream zipInput = new ZipInputStream(new BufferedInputStream(new FileInputStream(zipSource)));
-        try {
-            ZipEntry entry;
-            while ((entry = zipInput.getNextEntry()) != null) {
-                String name = normalizeZipName(entry.getName());
-                if (name.length() == 0 || !name.startsWith(prefix)) {
-                    zipInput.closeEntry();
-                    continue;
-                }
-                String relative = name.substring(prefix.length());
-                if (relative.length() == 0 || shouldSkipZipEntry(relative)) {
-                    zipInput.closeEntry();
-                    continue;
-                }
-
-                File out = safeZipOutputFile(targetRoot, relative);
-                if (entry.isDirectory() || relative.endsWith("/")) {
-                    if (!out.exists() && !out.mkdirs()) throw new IOException("Cannot create " + out.getAbsolutePath());
-                } else {
-                    File parent = out.getParentFile();
-                    if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IOException("Cannot create " + parent.getAbsolutePath());
-                    FileOutputStream fileOut = new FileOutputStream(out, false);
-                    try {
-                        stats.bytes += copy(zipInput, fileOut);
-                        stats.files++;
-                        if (progress != null && totalExtractFiles > 0) {
-                            int percent = 45 + (int) Math.min(45, (stats.files * 45L) / totalExtractFiles);
-                            progress.onProgress(t("Installation", "Installing"), percent);
-                        }
-                    } finally {
-                        fileOut.close();
-                    }
-                }
+        ZipEntry entry;
+        while ((entry = zipInput.getNextEntry()) != null) {
+            String name = normalizeZipName(entry.getName());
+            String lowerName = name.toLowerCase(Locale.US);
+            if (name.length() == 0 || shouldSkipZipEntry(name)) {
                 zipInput.closeEntry();
+                continue;
             }
-        } finally {
-            zipInput.close();
+
+            if (prefix == null) {
+                prefix = findZipGameDataPrefixFromEntry(name);
+                if (prefix != null) {
+                    prefixLower = prefix.toLowerCase(Locale.US);
+                }
+            }
+
+            if (prefix == null || !lowerName.startsWith(prefixLower)) {
+                zipInput.closeEntry();
+                continue;
+            }
+
+            String relative = name.substring(prefix.length());
+            if (relative.length() == 0 || shouldSkipZipEntry(relative)) {
+                zipInput.closeEntry();
+                continue;
+            }
+
+            File out = safeZipOutputFile(targetRoot, relative);
+            if (entry.isDirectory() || relative.endsWith("/")) {
+                if (!out.exists() && !out.mkdirs()) throw new IOException("Cannot create " + out.getAbsolutePath());
+            } else {
+                File parent = out.getParentFile();
+                if (parent != null && !parent.exists() && !parent.mkdirs()) throw new IOException("Cannot create " + parent.getAbsolutePath());
+                FileOutputStream fileOut = new FileOutputStream(out, false);
+                try {
+                    stats.bytes += copyZipEntry(zipInput, fileOut, progress, countingInput,
+                            totalCompressedBytes, progressPhase, lastPercent);
+                    stats.files++;
+                    if (progress != null && totalCompressedBytes <= 0) {
+                        progress.onProgress(t("Installation", "Installing"), 45);
+                    }
+                    if (progress != null && totalCompressedBytes > 0) {
+                        int percent = zipStreamPercent(countingInput, totalCompressedBytes);
+                        if (percent != lastPercent) {
+                            lastPercent = percent;
+                            progress.onProgress(progressPhase, percent);
+                        }
+                    }
+                } finally {
+                    fileOut.close();
+                }
+            }
+            zipInput.closeEntry();
+        }
+
+        if (prefix == null) {
+            throw new IOException("ZIP does not contain System, Maps, Textures, Sounds and Music.");
         }
     }
 
-    private int countExtractableZipFiles(File zipSource, String prefix) throws IOException {
-        int count = 0;
-        ZipFile zipFile = new ZipFile(zipSource);
+    private long copyZipEntry(ZipInputStream input, FileOutputStream output, ProgressCallback progress,
+                              CountingInputStream countingInput, long totalCompressedBytes,
+                              String progressPhase, int lastPercent) throws IOException {
+        byte[] buffer = new byte[128 * 1024];
+        long total = 0;
+        int read;
+        int localLastPercent = lastPercent;
+        while ((read = input.read(buffer)) != -1) {
+            output.write(buffer, 0, read);
+            total += read;
+            if (progress != null && totalCompressedBytes > 0) {
+                int percent = zipStreamPercent(countingInput, totalCompressedBytes);
+                if (percent != localLastPercent) {
+                    localLastPercent = percent;
+                    progress.onProgress(progressPhase, percent);
+                }
+            }
+        }
+        output.flush();
+        return total;
+    }
+
+    private void replaceTargetWithStagedData(File stagingData, File targetRoot) throws IOException {
+        if (stagingData == null || !stagingData.isDirectory()) throw new IOException("Staged install folder is not readable.");
+        File parent = targetRoot.getParentFile();
+        if (parent == null) throw new IOException("Install target has no parent folder.");
+        if (!parent.exists() && !parent.mkdirs()) throw new IOException("Cannot create " + parent.getAbsolutePath());
+
+        File backup = null;
+        boolean backupActive = false;
         try {
-            java.util.Enumeration<? extends ZipEntry> entries = zipFile.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                String name = normalizeZipName(entry.getName());
-                if (name.length() == 0 || !name.startsWith(prefix)) continue;
-                String relative = name.substring(prefix.length());
-                if (relative.length() == 0 || shouldSkipZipEntry(relative)) continue;
-                if (!entry.isDirectory() && !relative.endsWith("/")) count++;
+            if (targetRoot.exists()) {
+                backup = uniqueChild(parent, ".ut99-install-backup-");
+                if (backup.exists()) deleteRecursive(backup);
+                if (targetRoot.renameTo(backup)) {
+                    backupActive = true;
+                } else {
+                    clearDirectory(targetRoot);
+                }
             }
-        } finally {
-            zipFile.close();
+
+            if (!stagingData.renameTo(targetRoot)) {
+                if (!targetRoot.exists() && !targetRoot.mkdirs()) {
+                    throw new IOException("Cannot create " + targetRoot.getAbsolutePath());
+                }
+                copyLegacyChildren(stagingData, targetRoot, targetRoot, new InstallStats());
+            }
+
+            UT99Paths.normalizeInstalledDataRoot(targetRoot);
+            if (!UT99Paths.hasUsableGameData(targetRoot)) {
+                throw new IOException("Activated install folder does not contain required UT99 data.");
+            }
+
+            if (backupActive && backup != null) {
+                deleteRecursive(backup);
+                backupActive = false;
+            }
+        } catch (IOException ex) {
+            if (backupActive && backup != null && backup.exists()) {
+                try {
+                    deleteRecursive(targetRoot);
+                    backup.renameTo(targetRoot);
+                } catch (Throwable restoreError) {
+                    android.util.Log.e("UT99Installer", "could not restore previous UT99 data after failed activation", restoreError);
+                }
+            }
+            throw ex;
         }
-        return count;
     }
 
-    private void replaceDirectoryContents(File sourceDir, File targetDir) throws IOException {
-        if (sourceDir == null || !sourceDir.isDirectory()) throw new IOException("Source folder is not readable.");
-        if (!targetDir.exists() && !targetDir.mkdirs()) throw new IOException("Cannot create " + targetDir.getAbsolutePath());
-        clearDirectory(targetDir);
-        copyLegacyChildren(sourceDir, targetDir, targetDir, new InstallStats());
+    private File createTargetSiblingStagingData(File targetRoot) throws IOException {
+        File parent = targetRoot.getParentFile();
+        if (parent == null) throw new IOException("Install target has no parent folder.");
+        if (!parent.exists() && !parent.mkdirs()) throw new IOException("Cannot create " + parent.getAbsolutePath());
+        cleanupOldInstallWorkDirs(parent);
+        File stagingRoot = uniqueChild(parent, ".ut99-install-staging-");
+        File stagingData = new File(stagingRoot, targetRoot.getName());
+        if (!stagingData.mkdirs() && !stagingData.isDirectory()) {
+            throw new IOException("Cannot create temporary install folder in " + parent.getAbsolutePath());
+        }
+        android.util.Log.i("UT99Installer", "streaming ZIP staging=" + stagingData.getAbsolutePath() + " target=" + targetRoot.getAbsolutePath());
+        return stagingData;
+    }
+
+    private File uniqueChild(File parent, String prefix) {
+        long now = android.os.SystemClock.uptimeMillis();
+        for (int i = 0; i < 100; i++) {
+            File child = new File(parent, prefix + now + (i == 0 ? "" : "-" + i));
+            if (!child.exists()) return child;
+        }
+        return new File(parent, prefix + now + "-" + java.lang.System.nanoTime());
+    }
+
+    private void cleanupOldInstallWorkDirs(File parent) {
+        File[] children = parent.listFiles();
+        if (children == null) return;
+        for (File child : children) {
+            if (child == null) continue;
+            String name = child.getName();
+            if (name.startsWith(".ut99-install-staging-") || name.startsWith(".ut99-install-backup-")) {
+                try {
+                    deleteRecursive(child);
+                } catch (IOException ex) {
+                    android.util.Log.w("UT99Installer", "could not delete old install work folder " + child.getAbsolutePath(), ex);
+                }
+            }
+        }
     }
 
     private void clearDirectory(File dir) throws IOException {
@@ -1276,38 +1348,45 @@ public class MainActivity extends Activity {
         }
     }
 
-    private String findZipGameDataPrefix(ZipFile zipFile) throws IOException {
-        Set<String> lowerNames = new HashSet<>();
-        java.util.Enumeration<? extends ZipEntry> entries = zipFile.entries();
-        while (entries.hasMoreElements()) {
-            String name = normalizeZipName(entries.nextElement().getName()).toLowerCase(Locale.US);
-            if (name.length() > 0) lowerNames.add(name);
-        }
-
-        Set<String> candidates = new HashSet<>();
-        for (String name : lowerNames) {
-            int idx = name.indexOf("system/");
-            if (idx >= 0) candidates.add(name.substring(0, idx));
-        }
-        candidates.add("");
-
-        for (String prefix : candidates) {
-            if (zipHasPath(lowerNames, prefix + "system/") &&
-                    zipHasPath(lowerNames, prefix + "maps/") &&
-                    zipHasPath(lowerNames, prefix + "textures/") &&
-                    zipHasPath(lowerNames, prefix + "sounds/") &&
-                    zipHasPath(lowerNames, prefix + "music/")) {
-                return prefix;
+    private String findZipGameDataPrefixFromEntry(String normalizedName) {
+        if (normalizedName == null) return null;
+        String lower = normalizeZipName(normalizedName).toLowerCase(Locale.US);
+        String[] markers = {"system/", "maps/", "textures/", "sounds/", "music/"};
+        for (String marker : markers) {
+            int idx = lower.indexOf(marker);
+            while (idx >= 0) {
+                if (idx == 0 || lower.charAt(idx - 1) == '/') {
+                    return normalizedName.substring(0, idx);
+                }
+                idx = lower.indexOf(marker, idx + 1);
             }
         }
         return null;
     }
 
-    private boolean zipHasPath(Set<String> names, String path) {
-        for (String name : names) {
-            if (name.equals(path) || name.startsWith(path)) return true;
+    private InputStream checkedZipInputStream(InputStream input) throws IOException {
+        PushbackInputStream pushback = new PushbackInputStream(new BufferedInputStream(input), 4);
+        byte[] signature = new byte[4];
+        int read = 0;
+        while (read < signature.length) {
+            int got = pushback.read(signature, read, signature.length - read);
+            if (got < 0) break;
+            read += got;
         }
-        return false;
+        if (read > 0) {
+            pushback.unread(signature, 0, read);
+        }
+        if (read < 4 || signature[0] != 'P' || signature[1] != 'K' ||
+                !((signature[2] == 3 || signature[2] == 5 || signature[2] == 7) &&
+                        (signature[3] == 4 || signature[3] == 6 || signature[3] == 8))) {
+            throw new IOException("Selected file is not a ZIP archive.");
+        }
+        return pushback;
+    }
+
+    private int zipStreamPercent(CountingInputStream input, long totalCompressedBytes) {
+        if (input == null || totalCompressedBytes <= 0) return 45;
+        return 5 + (int) Math.min(85L, (input.bytesRead * 85L) / totalCompressedBytes);
     }
 
     private boolean shouldSkipZipEntry(String relative) {
@@ -1401,6 +1480,34 @@ public class MainActivity extends Activity {
             this.uri = uri;
             this.name = name;
             this.directory = directory;
+        }
+    }
+
+    private static final class CountingInputStream extends InputStream {
+        private final InputStream input;
+        long bytesRead;
+
+        CountingInputStream(InputStream input) {
+            this.input = input;
+        }
+
+        @Override
+        public int read() throws IOException {
+            int value = input.read();
+            if (value >= 0) bytesRead++;
+            return value;
+        }
+
+        @Override
+        public int read(byte[] buffer, int offset, int length) throws IOException {
+            int read = input.read(buffer, offset, length);
+            if (read > 0) bytesRead += read;
+            return read;
+        }
+
+        @Override
+        public void close() throws IOException {
+            input.close();
         }
     }
 

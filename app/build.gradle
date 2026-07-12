@@ -17,8 +17,8 @@ android {
         applicationId 'com.ast.ut99'
         minSdk 16          // Android 4.1.2 / OUYA
         targetSdk 28       // keeps legacy storage behaviour friendlier for old sideload devices
-        versionCode 1
-        versionName '1.7.3'
+        versionCode 2
+        versionName '1.7.4'
 
         ndk {
             abiFilters 'armeabi-v7a'
