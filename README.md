@@ -1,6 +1,4 @@
-<!-- <img width="150" height="150" alt="ut99" src="https://github.com/user-attachments/assets/20ab1f2c-fe07-48e2-b161-afabfe6e4cf3" /> -->
-
-<img width="2172" height="724" alt="image" src="https://github.com/user-attachments/assets/69f2b312-5ee9-428e-a0af-038e0d18f171" />
+<img width="2172" height="724" alt="image" src="https://github.com/Andiweli/UT99-Android/blob/master/images/unreal-header.jpg" />
 
 
 # Unreal Tournament (UT99) Android
