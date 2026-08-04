@@ -10,8 +10,8 @@
   <a href="https://github.com/Andiweli/UT99-Android/releases">DOWNLOAD</a>
 </p>
 
-![Android 15](https://img.shields.io/badge/OS-up%20to%20Android%2015-green)
-![ABI](https://img.shields.io/badge/ABI-DualABI%2032%2F64bit-orange.svg)
+![OS](https://img.shields.io/badge/up%20to-Android%2016-green)
+![Architecture](https://img.shields.io/badge/architecture-32/64bit-orange.svg)
 ![AI](https://img.shields.io/badge/AI-assisted%20coding-6e7781)
 ![Controller](https://img.shields.io/badge/Controls-Touch/Controller-blueviolet)
 ![Multiplayer](https://img.shields.io/badge/Multiplayer-local%20WiFi-blueviolet)
@@ -43,7 +43,7 @@
 
 ## ◈ Features
 
-- Android support for newer Android devices up to Android 15.
+- Android support for newer Android devices up to Android 16.
 - OUYA (Android 4.x) legacy support - with a lower internal render resolution for better performance on legacy hardware.
 - Improved Game Data Import – Unreal Tournament data can be imported via folder or ZIP selection and automatically installs to the app's data folder.
 - Android 8+ Storage Access Fixed – SAF support added for modern Android versions where direct SD/file access is restricted.
@@ -60,7 +60,7 @@
 
 - Android device with OpenGL ES 2.0 support.
 - Android 4.1 / API 16 or newer.
-- ARMv7 or ARMv8 compatible device for the current build.
+- A compatible device.
 - Android-compatible game controller recommended.
 - Original Unreal Tournament / UT99 [PC game data v400](https://archive.org/download/ut-99_202512/UT99.iso).
 
