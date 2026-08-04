@@ -111,7 +111,7 @@ template< class T > inline T Clamp( const T X, const T Min, const T Max )
 }
 template< class T > inline T Align( const T Ptr, INT Alignment )
 {
-	return (T)(((DWORD)Ptr + Alignment - 1) & ~(Alignment-1));
+	return (T)(((UPTRINT)Ptr + Alignment - 1) & ~(UPTRINT)(Alignment-1));
 }
 template< class T > inline void Exchange( T& A, T& B )
 {
@@ -171,7 +171,7 @@ inline DWORD GetTypeHash( const TCHAR* S )
 
 // Offset of a struct member.
 #define STRUCT_OFFSET( struc, member ) \
-	( (INT)&((struc*)NULL)->member )
+	( (INT)(UPTRINT)&((struc*)NULL)->member )
 
 /*-----------------------------------------------------------------------------
 	Allocators.

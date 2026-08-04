@@ -860,28 +860,48 @@ static UBOOL UT99AndroidLikelyEditFieldClickV112( INT X, INT Y )
 static DOUBLE GUT99V112PendingKeyboardUntil = 0.0;
 static INT    GUT99V112PendingKeyboardX = 0;
 static INT    GUT99V112PendingKeyboardY = 0;
+// UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME:
+// Preserve whether the UWindow hit-test itself identified the finger target as
+// an EditBox. This is more reliable than fixed screen-coordinate bands and
+// still cannot trigger the IME for checkboxes, sliders, tabs or scrollbars.
+static UBOOL  GUT99V170BLastTouchWasEditTarget = 0;
+static UBOOL  GUT99V170BPendingKeyboardFromEditTarget = 0;
 
 static void UT99AndroidShowKeyboardForClickedEditV110( SDL_Window* Window, INT X, INT Y, const char* Source )
 {
-    const UBOOL bFocusedEditV169K = UT99AndroidFocusedEditBoxWantsKeyboardAtV84( X, Y );
+    // UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME:
+    // The old coordinate-only heuristic excluded valid right-side edit controls
+    // such as the Mouse Sensitivity value at 1920x1080 (X > 980). When direct
+    // UWindow touch dispatch says the tapped object is an EditBox, trust that
+    // exact hit-test and only use the legacy bands as a fallback for old paths.
+    const UBOOL bExactEditTargetV170B = GUT99V170BLastTouchWasEditTarget;
+    GUT99V170BLastTouchWasEditTarget = 0;
+
+    const UBOOL bFocusedEditV170B = bExactEditTargetV170B
+        ? UT99AndroidFocusedEditBoxWantsKeyboardV79()
+        : UT99AndroidFocusedEditBoxWantsKeyboardAtV84( X, Y );
     const UBOOL bLikelyEditClickV169K = UT99AndroidLikelyEditFieldClickV112( X, Y );
     const UBOOL bStartUTNameEditV169K = UT99AndroidFocusedEditBoxClassContainsV169K( TEXT("NameEditBox") )
         && X >= 90 && X <= 760 && Y >= 135 && Y <= 345;
+    const UBOOL bEditClickV170B = bExactEditTargetV170B || bLikelyEditClickV169K || bStartUTNameEditV169K;
 
-    if( bFocusedEditV169K && ( bLikelyEditClickV169K || bStartUTNameEditV169K ) )
+    if( bFocusedEditV170B && bEditClickV170B )
     {
         GUT99V112PendingKeyboardUntil = 0.0;
+        GUT99V170BPendingKeyboardFromEditTarget = 0;
         UT99AndroidShowSoftKeyboardV44( Window, X, Y );
-        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V169K_EDITBOX_IME_DIRECT showed Android keyboard after focused %s click x=%d y=%d namebox=%d ouya=%d", Source ? Source : "menu", X, Y, bStartUTNameEditV169K ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
+        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME showed keyboard source=%s x=%d y=%d exact=%d namebox=%d ouya=%d", Source ? Source : "menu", X, Y, bExactEditTargetV170B ? 1 : 0, bStartUTNameEditV169K ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
     }
-    else if( bLikelyEditClickV169K || bStartUTNameEditV169K )
+    else if( bEditClickV170B )
     {
-        // UWindow sometimes transfers edit focus one frame after Click() on OUYA.
-        // Defer the IME decision to TickInput, but only for plausible text fields.
+        // UWindow sometimes transfers edit focus one frame after Click(), most
+        // notably on OUYA. Preserve whether this came from an exact EditBox hit
+        // so the delayed check also avoids the old coordinate restrictions.
         GUT99V112PendingKeyboardX = X;
         GUT99V112PendingKeyboardY = Y;
         GUT99V112PendingKeyboardUntil = appSeconds() + 0.60;
-        UT99_ANDROID_SDL_LOGI( "v112 pending keyboard check after %s click x=%d y=%d ouya=%d", Source ? Source : "menu", X, Y, GUT99V79OuyaLikeDevice ? 1 : 0 );
+        GUT99V170BPendingKeyboardFromEditTarget = bExactEditTargetV170B;
+        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME pending source=%s x=%d y=%d exact=%d ouya=%d", Source ? Source : "menu", X, Y, bExactEditTargetV170B ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
     }
     else
     {
@@ -889,9 +909,9 @@ static void UT99AndroidShowKeyboardForClickedEditV110( SDL_Window* Window, INT X
         // A normal menu click, especially OUYA native touchpad clicks on checkboxes,
         // must not be followed by SDL_StopTextInput() unless the IME is actually open.
         // Calling StopTextInput after every non-edit click can eat/defocus the UWindow
-        // control on older OUYA/Android 4.x builds.  Keep the v112 exact IME gating,
-        // but leave ordinary checkboxes/buttons alone.
+        // control on older OUYA/Android 4.x builds.
         GUT99V112PendingKeyboardUntil = 0.0;
+        GUT99V170BPendingKeyboardFromEditTarget = 0;
         if( GUT99AndroidImeOpenV79 )
             UT99AndroidHideSoftKeyboardV72();
         UT99_ANDROID_SDL_LOGI( "v113 no keyboard for non-edit %s click x=%d y=%d ime=%d", Source ? Source : "menu", X, Y, GUT99AndroidImeOpenV79 ? 1 : 0 );
@@ -1592,16 +1612,21 @@ static void UT99V47TickInput( UNSDLViewport* Viewport, UBOOL bMenu )
             const DOUBLE NowKeyboard = appSeconds();
             if( NowKeyboard <= GUT99V112PendingKeyboardUntil )
             {
-                if( UT99AndroidFocusedEditBoxWantsKeyboardAtV84( GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY ) )
+                const UBOOL bFocusedPendingEditV170B = GUT99V170BPendingKeyboardFromEditTarget
+                    ? UT99AndroidFocusedEditBoxWantsKeyboardV79()
+                    : UT99AndroidFocusedEditBoxWantsKeyboardAtV84( GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
+                if( bFocusedPendingEditV170B )
                 {
                     UT99AndroidShowSoftKeyboardV44( NULL, GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
                     GUT99V112PendingKeyboardUntil = 0.0;
-                    UT99_ANDROID_SDL_LOGI( "v112 delayed focused edit opened keyboard x=%d y=%d", GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
+                    GUT99V170BPendingKeyboardFromEditTarget = 0;
+                    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME delayed keyboard x=%d y=%d", GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
                 }
             }
             else
             {
                 GUT99V112PendingKeyboardUntil = 0.0;
+                GUT99V170BPendingKeyboardFromEditTarget = 0;
             }
         }
 #endif
@@ -2932,6 +2957,35 @@ static UBOOL UT99AndroidDirectWindowClickV169H( UObject* Window, INT Message )
     return 0;
 }
 
+static UBOOL UT99AndroidWriteScriptParamV170A( UFunction* Function, BYTE* Buffer, INT BufferSize, const TCHAR* ParamName, const void* Value, INT ValueSize )
+{
+    // UT99_ANDROID_V170A_ARM64_UWINDOW_PARAM_LAYOUT:
+    // Never describe a script-call parameter block with a local C++ struct.
+    // On LP64 a BYTE followed by UObject* gets compiler padding to offset 8,
+    // while UnrealScript's pack(4) layout puts the pointer at offset 4.  Use
+    // the linked UProperty offsets from the loaded UFunction instead, so this
+    // remains correct on both armeabi-v7a and arm64-v8a.
+    if( !Function || !Buffer || BufferSize <= 0 || !ParamName || !Value || ValueSize <= 0 )
+        return 0;
+
+    for( UField* Field=Function->Children; Field; Field=Field->Next )
+    {
+        UProperty* Property = Cast<UProperty>( Field );
+        if( !Property || !(Property->PropertyFlags & CPF_Parm) )
+            continue;
+        if( appStricmp( Property->GetName(), ParamName ) != 0 )
+            continue;
+        if( Property->Offset < 0 || Property->Offset + ValueSize > BufferSize || ValueSize > Property->ElementSize )
+            return 0;
+
+        // appMemcpy avoids undefined/unaligned native pointer stores at the
+        // valid pack(4) offset used by the script parameter frame on ARM64.
+        appMemcpy( Buffer + Property->Offset, Value, ValueSize );
+        return 1;
+    }
+    return 0;
+}
+
 static UBOOL UT99AndroidUWindowWindowEventV169E( UNSDLViewport* Viewport, INT Message, INT MouseX, INT MouseY, INT Key )
 {
     UObject* Root = UT99AndroidFindUWindowRootV169E();
@@ -2941,6 +2995,13 @@ static UBOOL UT99AndroidUWindowWindowEventV169E( UNSDLViewport* Viewport, INT Me
         return 0;
 
     UObject* Target = UT99AndroidFindWindowUnderV169H( Root, UIX, UIY );
+    if( Message == 0 )
+    {
+        // Save the exact finger-down target for the post-click IME decision.
+        // A later non-edit touch clears this immediately, preventing stale focus
+        // from reopening the keyboard on checkboxes or other menu controls.
+        GUT99V170BLastTouchWasEditTarget = Target && UT99AndroidIsEditTargetV169I( Target );
+    }
     if( Target && UT99AndroidDirectWindowClickV169H( Target, Message ) )
     {
         UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V169J_TOP_MENU_DIRECT_SELECT direct target=%s msg=%d x=%d y=%d", Target->GetClass() ? Target->GetClass()->GetName() : "?", Message, MouseX, MouseY );
@@ -2948,23 +3009,28 @@ static UBOOL UT99AndroidUWindowWindowEventV169E( UNSDLViewport* Viewport, INT Me
     }
 
     UFunction* WindowEvent = Root->FindFunction( FName(TEXT("WindowEvent"), FNAME_Find) );
-    if( WindowEvent )
+    if( WindowEvent && WindowEvent->ParmsSize > 0 )
     {
-        struct FWindowEventParms
+        TArray<BYTE> Parms;
+        Parms.AddZeroed( WindowEvent->ParmsSize );
+        BYTE* ParmsData = &Parms(0);
+        const BYTE Msg = (BYTE)Message;
+        UObject* C = NULL;
+
+        const UBOOL bLayoutOK
+            = UT99AndroidWriteScriptParamV170A( WindowEvent, ParmsData, Parms.Num(), TEXT("Msg"), &Msg, sizeof(Msg) )
+           && UT99AndroidWriteScriptParamV170A( WindowEvent, ParmsData, Parms.Num(), TEXT("C"),   &C,   sizeof(C) )
+           && UT99AndroidWriteScriptParamV170A( WindowEvent, ParmsData, Parms.Num(), TEXT("X"),   &UIX, sizeof(UIX) )
+           && UT99AndroidWriteScriptParamV170A( WindowEvent, ParmsData, Parms.Num(), TEXT("Y"),   &UIY, sizeof(UIY) )
+           && UT99AndroidWriteScriptParamV170A( WindowEvent, ParmsData, Parms.Num(), TEXT("Key"), &Key, sizeof(Key) );
+
+        if( !bLayoutOK )
         {
-            BYTE Msg;
-            UObject* C;
-            FLOAT X;
-            FLOAT Y;
-            INT Key;
-        } Parms;
-        appMemzero( &Parms, sizeof(Parms) );
-        Parms.Msg = (BYTE)Message;
-        Parms.C = NULL;
-        Parms.X = UIX;
-        Parms.Y = UIY;
-        Parms.Key = Key;
-        Root->ProcessEvent( WindowEvent, &Parms );
+            UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170A_ARM64_UWINDOW_PARAM_LAYOUT failed ParmsSize=%d", (INT)WindowEvent->ParmsSize );
+            return 0;
+        }
+
+        Root->ProcessEvent( WindowEvent, ParmsData );
         UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V169J_TOP_MENU_DIRECT_SELECT root msg=%d target=%s x=%d y=%d", Message, Target && Target->GetClass() ? Target->GetClass()->GetName() : "?", MouseX, MouseY );
         return 1;
     }
@@ -3352,6 +3418,10 @@ UNSDLViewport::UNSDLViewport( ULevel* InLevel, UNSDLClient* InClient )
 ,	Client( InClient )
 {
 	guard(UNSDLViewport::UNSDLViewport);
+
+	// Populate the SDL scancode translation table. The newer
+	// InternalClassInitializer hook is not invoked by this engine generation.
+	InitKeyMap();
 
 	// Set color bytes based on screen resolution.
 	SDL_DisplayMode Mode;

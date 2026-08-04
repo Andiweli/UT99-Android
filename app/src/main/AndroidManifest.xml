@@ -18,10 +18,12 @@
 
     <application
         android:allowBackup="false"
+        android:appCategory="game"
         android:extractNativeLibs="true"
         android:hardwareAccelerated="false"
         android:hasCode="true"
         android:icon="@mipmap/ic_launcher"
+        android:isGame="true"
         android:banner="@drawable/ouya_icon"
         android:label="@string/app_name"
         android:theme="@style/AppTheme">

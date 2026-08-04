@@ -18,12 +18,15 @@
 // small for several retail UT99 maps such as CityIntro.unr and trips the
 // renderer assertion in URender::OccludeBsp(). Keep the Dreamcast-friendly
 // values for non-Android builds, but allow larger retail maps on Android.
-#if defined(__ANDROID__)
+#if defined(PLATFORM_DREAMCAST)
+enum {MAX_NODES  = 4096};
+enum {MAX_POINTS = 8192};
+#elif defined(PLATFORM_ANDROID)
 enum {MAX_NODES  = 32768};
 enum {MAX_POINTS = 65536};
 #else
-enum {MAX_NODES  = 4096};
-enum {MAX_POINTS = 8192};
+enum {MAX_NODES  = 30000};
+enum {MAX_POINTS = 30000};
 #endif
 
 class ENGINE_API UModel : public UPrimitive

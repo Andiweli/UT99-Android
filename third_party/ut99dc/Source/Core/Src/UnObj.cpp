@@ -81,14 +81,15 @@ UObject::UObject( ENativeConstructor, UClass* InClass, const TCHAR* InName, cons
 	// Make sure registration is allowed now.
 	check(!GObjNoRegister);
 
-	// Setup registration info, for processing now (if inited) or later (if starting up).
-	check(sizeof(Outer       )>=sizeof(InPackageName));
-	check(sizeof(Name        )>=sizeof(InName       ));
-	check(sizeof(_LinkerIndex)>=sizeof(GAutoRegister));
-	*(const TCHAR  **)&Outer        = InPackageName;
-	*(const TCHAR  **)&Name         = InName;
-	*(UObject      **)&_LinkerIndex = GAutoRegister;
-	GAutoRegister                   = this;
+	// Stash native registration pointers only in pointer-sized members.
+	// FName and INT fields are four bytes and cannot hold pointers on LP64.
+	check(sizeof(Outer)      >=sizeof(InPackageName));
+	check(sizeof(StateFrame) >=sizeof(InName));
+	check(sizeof(_Linker)    >=sizeof(GAutoRegister));
+	*(const TCHAR **)&Outer      = InPackageName;
+	*(const TCHAR **)&StateFrame = InName;
+	*(UObject     **)&_Linker    = GAutoRegister;
+	GAutoRegister               = this;
 
 	// Call native registration from terminal constructor.
 	if( GetInitialized() && GetClass()==StaticClass() )
@@ -1225,13 +1226,15 @@ void UObject::Register()
 	guard(UObject::Register);
 	check(GObjInitialized);
 
-	// Get stashed registration info.
+	// Get pointer-sized stashed registration info.
 	const TCHAR* InOuter = *(const TCHAR**)&Outer;
-	const TCHAR* InName  = *(const TCHAR**)&Name;
+	const TCHAR* InName  = *(const TCHAR**)&StateFrame;
 
-	// Set object properties.
+	// Set object properties and restore stash fields to their real meanings.
 	Outer        = CreatePackage(NULL,InOuter);
 	Name         = InName;
+	StateFrame   = NULL;
+	_Linker      = NULL;
 	_LinkerIndex = INDEX_NONE;
 
 	// Validate the object.
@@ -1333,8 +1336,8 @@ void UObject::ProcessRegistrants()
 	guard(UObject::ProcessRegistrants);
 	if( ++GObjRegisterCount==1 )
 	{
-		// Make list of all objects to be registered.
-		for( ; GAutoRegister; GAutoRegister=*(UObject **)&GAutoRegister->_LinkerIndex )
+		// The autoregistration chain is stashed in pointer-sized _Linker.
+		for( ; GAutoRegister; GAutoRegister=*(UObject **)&GAutoRegister->_Linker )
 			GObjRegistrants.AddItem( GAutoRegister );
 		for( INT i=0; i<GObjRegistrants.Num(); i++ )
 			GObjRegistrants(i)->ConditionalRegister();
@@ -3158,6 +3161,7 @@ UObject* UObject::StaticAllocateObject
 	UClass*  ClassWithin				= NULL;
 	DWORD    ClassFlags                 = 0;
 	void     (*ClassConstructor)(void*) = NULL;
+	INT      IntrinsicSize              = 0;
 	if( !Obj )
 	{
 		// Create a new object.
@@ -3181,6 +3185,7 @@ UObject* UObject::StaticAllocateObject
 			ClassWithin		 = Cls->ClassWithin;
 			ClassFlags       = Cls->ClassFlags & CLASS_Abstract;
 			ClassConstructor = Cls->ClassConstructor;
+			IntrinsicSize    = Cls->IntrinsicSize;
 		}
 
 		// Destroy the object.
@@ -3224,6 +3229,7 @@ UObject* UObject::StaticAllocateObject
 		Cls->ClassWithin	   = ClassWithin;
 		Cls->ClassFlags       |= ClassFlags;
 		Cls->ClassConstructor  = ClassConstructor;
+		Cls->IntrinsicSize     = IntrinsicSize;
 	}
 
 	// Success.

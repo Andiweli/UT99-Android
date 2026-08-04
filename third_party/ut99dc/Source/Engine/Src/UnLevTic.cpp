@@ -1696,8 +1696,11 @@ INT ULevel::ServerTickClient( UNetConnection* Connection, FLOAT DeltaSeconds )
 #if defined(__ANDROID__) || defined(PLATFORM_ANDROID)
 				if( !Connection->PackageMap )
 					continue;
+				UClass* ChannelActorClass = AndroidPriority->ActorClass;
+#else
+				UClass* ChannelActorClass = Actor ? Actor->GetClass() : NULL;
 #endif
-				if( !Channel && Connection->PackageMap->ObjectToIndex(AndroidPriority->ActorClass)!=INDEX_NONE )
+				if( !Channel && ChannelActorClass && Connection->PackageMap->ObjectToIndex(ChannelActorClass)!=INDEX_NONE )
 				{
 					// Create a new channel for this actor.
 					Channel = (UActorChannel*)Connection->CreateChannel( CHTYPE_Actor, 1 );

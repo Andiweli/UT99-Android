@@ -123,12 +123,14 @@ typedef uint8_t				BYTE;		// 8-bit  unsigned.
 typedef uint16_t			_WORD;		// 16-bit unsigned.
 typedef uint32_t 			DWORD;		// 32-bit unsigned.
 typedef uint64_t 			QWORD;		// 64-bit unsigned.
+typedef uintptr_t			UPTRINT;	// Pointer-sized unsigned int.
 
 // Signed base types.
 typedef	int8_t				SBYTE;		// 8-bit  signed.
 typedef int16_t  			SWORD;		// 16-bit signed.
 typedef int32_t    			INT;		// 32-bit signed.
 typedef int64_t  			SQWORD;		// 64-bit signed.
+typedef intptr_t			PTRINT;		// Pointer-sized signed int.
 
 // Character types.
 typedef char			    ANSICHAR;	// An ANSI character.

@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <dirent.h>
 #include <utime.h>
+#include <limits.h>
 #include <sys/time.h>
 #include <sys/stat.h>
 #ifndef UNREAL_STATIC

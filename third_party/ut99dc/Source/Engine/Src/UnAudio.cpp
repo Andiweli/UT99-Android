@@ -351,7 +351,7 @@ UBOOL FWaveModInfo::ReadWaveInfo( TArray<BYTE>& WavData )
 	// Chunk found ? smpl chunk is optional.
 	// Find the first sample-loop structure, and the total number of them.
 
-	if( (INT)RiffChunk+4<(INT)WaveDataEnd && RiffChunk->ChunkID == mmioFOURCC('s','m','p','l') )
+	if( (UPTRINT)RiffChunk+4<(UPTRINT)WaveDataEnd && RiffChunk->ChunkID == mmioFOURCC('s','m','p','l') )
 	{
 		FSampleChunk* pSampleChunk =  (FSampleChunk*)( (BYTE*)RiffChunk + 8);
 		SampleLoopsNum  = pSampleChunk->cSampleLoops; // Number of tSampleLoop structures.

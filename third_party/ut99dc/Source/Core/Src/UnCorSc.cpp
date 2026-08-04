@@ -343,14 +343,16 @@ void UObject::execBoolVariable( FFrame& Stack, RESULT_DECL )
 {
 	guardSlow(UObject::execBoolVariable);
 
-	// Get bool variable.
+	// The following variable opcode operand is a fixed 4-byte GObjObjects
+	// index, not a native pointer.
 	BYTE B = *Stack.Code++;
 #if defined(PLATFORM_DREAMCAST) || defined(PLATFORM_ANDROID)
-	UBoolProperty* Property;
-	__builtin_memcpy( &Property, Stack.Code, sizeof( Property ) );
+	INT PropIndex;
+	__builtin_memcpy( &PropIndex, Stack.Code, sizeof( PropIndex ) );
 #else
-	UBoolProperty* Property = *(UBoolProperty**)Stack.Code;
+	INT PropIndex = *(INT*)Stack.Code;
 #endif
+	UBoolProperty* Property = (UBoolProperty*)UObject::GetIndexedObject( PropIndex );
 	(this->*GNatives[B])( Stack, NULL );
 	GProperty = Property;
 

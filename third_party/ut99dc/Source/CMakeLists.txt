@@ -102,17 +102,6 @@ endif()
 message(STATUS "Target arch: ${TARGET_ARCH}")
 message(STATUS "64-bit: ${TARGET_IS_64BIT}")
 
-if(TARGET_IS_64BIT)
-  if(TARGET_IS_X86 AND NOT MSVC)
-    message(STATUS "Building x86 binary with x86_64 compiler")
-    set(TARGET_IS_64BIT FALSE)
-    set(TARGET_ARCH "x86")
-    add_compile_options(-m32)
-  else()
-    message(FATAL_ERROR "64-bit platforms are currently not supported. If you're building on Windows with MSVC, try -A Win32.")
-  endif()
-endif()
-
 # Determine target OS/platform
 
 set(TARGET_IS_WINDOWS FALSE)

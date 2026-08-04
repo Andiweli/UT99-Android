@@ -52,7 +52,8 @@ static bool make_child_path(char* out, size_t outSize, const char* root, const c
 static jboolean prepare_process_common(
         JNIEnv* env,
         jstring dataRootString,
-        jstring homeDirString) {
+        jstring homeDirString,
+        jstring versionNameString) {
     if (!env || !dataRootString || !homeDirString) {
         LOGE("nativePrepareProcess called with null JNI arguments");
         return JNI_FALSE;
@@ -60,14 +61,20 @@ static jboolean prepare_process_common(
 
     const char* dataRoot = env->GetStringUTFChars(dataRootString, nullptr);
     const char* homeDir = env->GetStringUTFChars(homeDirString, nullptr);
+    const char* versionName = versionNameString
+            ? env->GetStringUTFChars(versionNameString, nullptr)
+            : nullptr;
 
-    if (!dataRoot || !homeDir) {
+    if (!dataRoot || !homeDir || (versionNameString && !versionName)) {
         LOGE("GetStringUTFChars failed: dataRoot=%p homeDir=%p", dataRoot, homeDir);
         if (dataRoot) {
             env->ReleaseStringUTFChars(dataRootString, dataRoot);
         }
         if (homeDir) {
             env->ReleaseStringUTFChars(homeDirString, homeDir);
+        }
+        if (versionName) {
+            env->ReleaseStringUTFChars(versionNameString, versionName);
         }
         return JNI_FALSE;
     }
@@ -121,6 +128,24 @@ static jboolean prepare_process_common(
         ok = false;
     }
 
+    // UT99_ANDROID_V200_RUNTIME_VERSION:
+    // BuildConfig.VERSION_NAME is the authoritative APK version. Export it to
+    // the native engine before SDL loads libUnrealTournament.so, so the menu
+    // label can never be left behind by a stale CMake cache or hardcoded define.
+    if (versionNameString) {
+        if (versionName && *versionName) {
+            if (::setenv("UT99_ANDROID_VERSION_NAME", versionName, 1) != 0) {
+                LOGE("setenv(UT99_ANDROID_VERSION_NAME) failed: %s", ::strerror(errno));
+                ok = false;
+            } else {
+                LOGI("Runtime build version set to %s", versionName);
+            }
+        } else {
+            LOGE("Runtime build version is empty");
+            ok = false;
+        }
+    }
+
     // appBaseDir() in the Unix/SDL platform layer is used very early by logging.
     // SDL_GetBasePath() can return null on Android/SDL2 in this embedded launch path,
     // so provide a stable System directory before SDL_main enters the Unreal launcher.
@@ -140,6 +165,9 @@ static jboolean prepare_process_common(
 
     env->ReleaseStringUTFChars(dataRootString, dataRoot);
     env->ReleaseStringUTFChars(homeDirString, homeDir);
+    if (versionName) {
+        env->ReleaseStringUTFChars(versionNameString, versionName);
+    }
 
     return ok ? JNI_TRUE : JNI_FALSE;
 }
@@ -151,8 +179,9 @@ Java_com_ast_ut99_GameActivity_nativePrepareProcess(
         JNIEnv* env,
         jclass,
         jstring dataRootString,
-        jstring homeDirString) {
-    return prepare_process_common(env, dataRootString, homeDirString);
+        jstring homeDirString,
+        jstring versionNameString) {
+    return prepare_process_common(env, dataRootString, homeDirString, versionNameString);
 }
 
 extern "C" JNIEXPORT jboolean JNICALL
@@ -161,5 +190,5 @@ Java_com_ast_ut99_MainActivity_nativePrepareProcess(
         jclass,
         jstring dataRootString,
         jstring homeDirString) {
-    return prepare_process_common(env, dataRootString, homeDirString);
+    return prepare_process_common(env, dataRootString, homeDirString, nullptr);
 }

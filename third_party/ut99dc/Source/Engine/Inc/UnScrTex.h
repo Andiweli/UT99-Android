@@ -6,6 +6,8 @@
 		* Created by Jack Porter
 =============================================================================*/
 
+#pragma pack (push,4) /* Match UnrealScript native class mirror layout */
+
 class ENGINE_API  UScriptedTexture : public UTexture
 {
 	DECLARE_CLASS(UScriptedTexture,UTexture,0)
@@ -47,3 +49,5 @@ private:
 /*-----------------------------------------------------------------------------
 	The End.
 -----------------------------------------------------------------------------*/
+
+#pragma pack (pop)

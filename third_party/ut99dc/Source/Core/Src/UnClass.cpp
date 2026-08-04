@@ -283,6 +283,7 @@ UStruct::UStruct( ENativeConstructor, INT InSize, const TCHAR* InName, const TCH
 ,	ScriptText		( NULL )
 ,	Children		( NULL )
 ,	PropertiesSize	( InSize )
+,	IntrinsicSize	( InSize )
 ,	Script			()
 ,	TextPos			( 0 )
 ,	Line			( 0 )
@@ -293,6 +294,9 @@ UStruct::UStruct( ENativeConstructor, INT InSize, const TCHAR* InName, const TCH
 ,	ConstructorLink	( NULL )
 ,	FriendlyName	( /*Uninitialized*/ )
 {}
+// IntrinsicSize is intentionally not initialized by the package-loaded
+// constructor below. Like UClass::ClassConstructor, it must survive the
+// in-place reconstruction of an already registered intrinsic class.
 UStruct::UStruct( UStruct* InSuperStruct )
 :	UField( InSuperStruct )
 ,	PropertiesSize( InSuperStruct ? InSuperStruct->GetPropertiesSize() : 0 )
@@ -324,6 +328,41 @@ void UStruct::Register()
 	unguard;
 }
 
+
+//
+// Script mirrors of native classes contain 32-bit placeholder properties for
+// hidden C++ pointer members. On LP64 those slots must expand to pointer width
+// without changing the serialized .u package format.
+//
+static INT GetPlaceholderSize( UStruct* Owner, UProperty* Property )
+{
+	static const INT ObjectInternalSize = 4*sizeof(void*) + 2*sizeof(INT);
+	static const struct { const TCHAR* Struct; const TCHAR* Prop; INT Size; } Placeholders[] =
+	{
+		{ TEXT("Object"),          TEXT("ObjectInternal"),     ObjectInternalSize },
+		{ TEXT("Subsystem"),       TEXT("ExecVtbl"),           sizeof(void*) },
+		{ TEXT("Console"),         TEXT("vtblOut"),            sizeof(void*) },
+		{ TEXT("Player"),          TEXT("vfOut"),              sizeof(void*) },
+		{ TEXT("Player"),          TEXT("vfExec"),             sizeof(void*) },
+		{ TEXT("Canvas"),          TEXT("FramePtr"),           sizeof(void*) },
+		{ TEXT("Canvas"),          TEXT("RenderPtr"),          sizeof(void*) },
+		{ TEXT("ScriptedTexture"), TEXT("Junk1"),              sizeof(void*) },
+		{ TEXT("ScriptedTexture"), TEXT("Junk2"),              sizeof(void*) },
+		{ TEXT("ScriptedTexture"), TEXT("Junk3"),              sizeof(void*) },
+		{ TEXT("InternetLink"),    TEXT("PrivateResolveInfo"), sizeof(void*) },
+		{ TEXT("StatLog"),         TEXT("Context"),            sizeof(void*) },
+		{ TEXT("StatLogFile"),     TEXT("LogAr"),              sizeof(void*) },
+		{ TEXT("WaterTexture"),    TEXT("SourceFields"),       sizeof(void*) },
+		{ TEXT("WetTexture"),      TEXT("LocalSourceBitmap"),  sizeof(void*) },
+		{ TEXT("IceTexture"),      TEXT("LocalSource"),        sizeof(void*) },
+	};
+	for( INT i=0; i<ARRAY_COUNT(Placeholders); i++ )
+		if( appStricmp(Owner->GetName(),Placeholders[i].Struct)==0
+		&&  appStricmp(Property->GetName(),Placeholders[i].Prop)==0 )
+			return Placeholders[i].Size;
+	return 0;
+}
+
 //
 // Link offsets.
 //
@@ -350,12 +389,36 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 			UProperty* Property = Cast<UProperty>( Field );
 			if( Property )
 			{
-				Property->Link( Ar, Prev );
-				PropertiesSize = Property->Offset + Property->GetSize();
+				INT PlaceholderSize = GetPlaceholderSize( this, Property );
+				if( PlaceholderSize )
+				{
+					Property->Offset = Align( PropertiesSize, 4 );
+					PropertiesSize   = Property->Offset + PlaceholderSize;
+				}
+				else
+				{
+					Property->Link( Ar, Prev );
+					PropertiesSize = Property->Offset + Property->GetSize();
+				}
 				Prev = Property;
 			}
 		}
 		PropertiesSize = Align(PropertiesSize,4);
+
+		// A mismatch means C++ and UnrealScript would address members at
+		// different offsets. Keep the allocation large enough and emit a
+		// precise diagnostic for ARM64 bring-up.
+		if( IntrinsicSize>0 && PropertiesSize!=IntrinsicSize )
+		{
+			debugf( NAME_Warning, TEXT("Native class size mismatch: %s script=%i C++=%i"), GetName(), PropertiesSize, IntrinsicSize );
+			for( UField* Field=Children; Field && Field->GetOuter()==this; Field=Field->Next )
+			{
+				UProperty* Property = Cast<UProperty>( Field );
+				if( Property )
+					debugf( NAME_Warning, TEXT("  %s %s: offset=%i size=%i"), Property->GetClass()->GetName(), Property->GetName(), Property->Offset, Property->GetSize() );
+			}
+			PropertiesSize = Max( PropertiesSize, IntrinsicSize );
+		}
 	}
 	else
 	{
@@ -759,9 +822,9 @@ void UClass::Register()
 	guard(UClass::Register);
 	Super::Register();
 
-	// Get stashed registration info.
-	const TCHAR* InClassConfigName = *(TCHAR**)&ClassConfigName;
-	ClassConfigName = InClassConfigName;
+	// Get pointer-sized stashed registration info.
+	ClassConfigName = NativeConfigNameStash;
+	NativeConfigNameStash = NULL;
 
 	// Init default object.
 	Defaults.Empty( GetPropertiesSize() );
@@ -1034,9 +1097,8 @@ UClass::UClass
 ,	NetFields				()
 ,	ClassConstructor		( InClassConstructor )
 ,	ClassStaticConstructor	( InClassStaticConstructor )
-{
-	*(const TCHAR**)&ClassConfigName = InConfigName;
-}
+,	NativeConfigNameStash	( InConfigName )
+{}
 
 IMPLEMENT_CLASS(UClass);
 
@@ -1084,7 +1146,7 @@ CORE_API FArchive& operator<<( FArchive& Ar, FLabelEntry &Label )
 /*-----------------------------------------------------------------------------
 	UStruct implementation.
 -----------------------------------------------------------------------------*/
-#ifdef PLATFORM_DREAMCAST
+#if defined(PLATFORM_DREAMCAST) || defined(PLATFORM_ANDROID)
 template<typename T>
 static inline void XferAligned( FArchive& Ar, T* Ptr )
 {
@@ -1110,11 +1172,31 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 {
 	EExprToken Expr=(EExprToken)0;
 	guard(SerializeExpr);
-	#ifdef PLATFORM_DREAMCAST
+	#if defined(PLATFORM_DREAMCAST) || defined(PLATFORM_ANDROID)
 	#define XFER(T) {XferAligned(Ar, (T*)&Script(iCode)); iCode += sizeof(T);}
+	#define XFER_SCRIPT_INT_READ(Var)  __builtin_memcpy( &Var, &Script(iCode), sizeof(INT) );
+	#define XFER_SCRIPT_INT_WRITE(Var) __builtin_memcpy( &Script(iCode), &Var, sizeof(INT) );
 	#else
 	#define XFER(T) {Ar << *(T*)&Script(iCode); iCode += sizeof(T); }
+	#define XFER_SCRIPT_INT_READ(Var)  Var = *(INT*)&Script(iCode);
+	#define XFER_SCRIPT_INT_WRITE(Var) *(INT*)&Script(iCode) = Var;
 	#endif
+	// Object references in compiled bytecode must remain exactly four bytes.
+	// Store GObjObjects indices in memory and resolve them only at execution.
+	#define XFER_OBJ(T) \
+	{ \
+		UObject* Obj = NULL; \
+		INT ObjIndex = INDEX_NONE; \
+		if( !Ar.IsLoading() ) \
+		{ \
+			XFER_SCRIPT_INT_READ(ObjIndex); \
+			Obj = UObject::GetIndexedObject( ObjIndex ); \
+		} \
+		Ar << Obj; \
+		ObjIndex = Obj ? (INT)Obj->GetIndex() : INDEX_NONE; \
+		XFER_SCRIPT_INT_WRITE(ObjIndex); \
+		iCode += sizeof(INT); \
+	}
 
 	// Get expr token.
 	XFER(BYTE);
@@ -1153,7 +1235,7 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		case EX_InstanceVariable:
 		case EX_DefaultVariable:
 		{
-			XFER(UProperty*);
+			XFER_OBJ(UProperty);
 			break;
 		}
 		case EX_BoolVariable:
@@ -1183,7 +1265,7 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		}
 		case EX_FinalFunction:
 		{
-			XFER(UStruct*); // Stack node.
+			XFER_OBJ(UStruct); // Stack node.
 			while( SerializeExpr( iCode, Ar ) != EX_EndFunctionParms ); // Parms.
 			break;
 		}
@@ -1196,7 +1278,7 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		}
 		case EX_NativeParm:
 		{
-			XFER(UProperty*);
+			XFER_OBJ(UProperty);
 			break;
 		}
 		case EX_ClassContext:
@@ -1245,7 +1327,7 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		}
 		case EX_ObjectConst:
 		{
-			XFER(UObject*);
+			XFER_OBJ(UObject);
 			break;
 		}
 		case EX_NameConst:
@@ -1271,13 +1353,13 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		}
 		case EX_MetaCast:
 		{
-			XFER(UClass*);
+			XFER_OBJ(UClass);
 			SerializeExpr( iCode, Ar );
 			break;
 		}
 		case EX_DynamicCast:
 		{
-			XFER(UClass*);
+			XFER_OBJ(UClass);
 			SerializeExpr( iCode, Ar );
 			break;
 		}
@@ -1348,14 +1430,14 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		case EX_StructCmpEq:
 		case EX_StructCmpNe:
 		{
-			XFER(UStruct*); // Struct.
+			XFER_OBJ(UStruct); // Struct.
 			SerializeExpr( iCode, Ar ); // Left expr.
 			SerializeExpr( iCode, Ar ); // Right expr.
 			break;
 		}
 		case EX_StructMember:
 		{
-			XFER(UProperty*); // Property.
+			XFER_OBJ(UProperty); // Property.
 			SerializeExpr( iCode, Ar ); // Inner expr.
 			break;
 		}
@@ -1367,6 +1449,9 @@ EExprToken UStruct::SerializeExpr( INT& iCode, FArchive& Ar )
 		}
 	}
 	return Expr;
+	#undef XFER_OBJ
+	#undef XFER_SCRIPT_INT_READ
+	#undef XFER_SCRIPT_INT_WRITE
 	#undef XFER
 	unguardf(( TEXT("(%02X)"), Expr ));
 }

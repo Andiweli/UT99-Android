@@ -642,7 +642,7 @@ void UObjectProperty::Link( FArchive& Ar, UProperty* Prev )
 	guard(UObjectProperty::Link);
 	Super::Link( Ar, Prev );
 	ElementSize = sizeof(UObject*);
-	Offset      = Align( GetOuterUField()->GetPropertiesSize(), sizeof(UObject*) );
+	Offset      = Align( GetOuterUField()->GetPropertiesSize(), PROPERTY_ALIGNMENT );
 	unguardobj;
 }
 void UObjectProperty::CopySingleValue( void* Dest, void* Src ) const

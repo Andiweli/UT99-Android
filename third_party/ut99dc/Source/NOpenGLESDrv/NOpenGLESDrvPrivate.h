@@ -146,6 +146,7 @@ class DLL_EXPORT UNOpenGLESRenderDevice : public URenderDevice
 	// Constructors.
 	UNOpenGLESRenderDevice();
 	static void InternalClassInitializer( UClass* Class );
+	void StaticConstructor();
 
 	// URenderDevice interface.
 	virtual UBOOL Init( UViewport* InViewport, INT NewX, INT NewY, INT NewColorBytes, UBOOL Fullscreen ) override;

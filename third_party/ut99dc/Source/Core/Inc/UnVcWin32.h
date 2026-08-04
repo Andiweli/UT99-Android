@@ -66,12 +66,14 @@ typedef unsigned char		BYTE;		// 8-bit  unsigned.
 typedef unsigned short		_WORD;		// 16-bit unsigned.
 typedef unsigned long		DWORD;		// 32-bit unsigned.
 typedef unsigned __int64	QWORD;		// 64-bit unsigned.
+typedef UINT_PTR			UPTRINT;	// Pointer-sized unsigned int.
 
 // Signed base types.
 typedef	signed char			SBYTE;		// 8-bit  signed.
 typedef signed short		SWORD;		// 16-bit signed.
 typedef signed int  		INT;		// 32-bit signed.
 typedef signed __int64		SQWORD;		// 64-bit signed.
+typedef INT_PTR				PTRINT;		// Pointer-sized signed int.
 
 // Character types.
 typedef char				ANSICHAR;	// An ANSI character.
@@ -174,6 +176,7 @@ typedef unsigned long       BITFIELD;	// For bitfields.
 
 // Bitfield alignment.
 #define GCC_PACK(n)
+#define GCC_ALIGN(n)
 
 /*----------------------------------------------------------------------------
 	Globals.

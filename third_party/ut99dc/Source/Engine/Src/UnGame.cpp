@@ -436,6 +436,84 @@ static void AndroidLanBrowserTick()
 
 #endif
 
+#if defined(PLATFORM_ANDROID)
+// Draw the menu build label at an exact integer scale.  Using another stock
+// font would make the result dependent on language/font assets and would not
+// guarantee the requested 3x size relative to Engine.SmallFont.
+static void UT99AndroidMeasureScaledText( UFont* Font, const TCHAR* Text, FLOAT Scale, FLOAT SpaceX, FLOAT& OutW, FLOAT& OutH )
+{
+	OutW = 0.f;
+	OutH = 0.f;
+	if( !Font || !Text || Font->CharactersPerPage<=0 || Scale<=0.f )
+		return;
+
+	UBOOL bHaveCharacter = 0;
+	for( INT i=0; Text[i]; i++ )
+	{
+		INT Ch    = (TCHARU)Text[i];
+		INT Page  = Ch / Font->CharactersPerPage;
+		INT Index = Ch - Page * Font->CharactersPerPage;
+		if( Page<Font->Pages.Num() && Index<Font->Pages(Page).Characters.Num() )
+		{
+			FFontCharacter& Char = Font->Pages(Page).Characters(Index);
+			if( bHaveCharacter )
+				OutW += SpaceX * Scale;
+			OutW += Char.USize * Scale;
+			OutH  = Max<FLOAT>( OutH, Char.VSize * Scale );
+			bHaveCharacter = 1;
+		}
+	}
+}
+
+static void UT99AndroidDrawScaledText( UCanvas* Canvas, UFont* Font, const TCHAR* Text, FLOAT X, FLOAT Y, FLOAT Scale )
+{
+	if( !Canvas || !Canvas->Frame || !Canvas->Viewport || !Font || !Text || Font->CharactersPerPage<=0 || Scale<=0.f )
+		return;
+
+	const DWORD PolyFlags = PF_NoSmooth | PF_Masked | PF_RenderHint;
+	const FPlane DrawColor = Canvas->Color.Plane();
+	const FPlane NoFog(0,0,0,0);
+	UBOOL bHaveCharacter = 0;
+
+	for( INT i=0; Text[i]; i++ )
+	{
+		INT Ch    = (TCHARU)Text[i];
+		INT Page  = Ch / Font->CharactersPerPage;
+		INT Index = Ch - Page * Font->CharactersPerPage;
+		if( Page<Font->Pages.Num() && Index<Font->Pages(Page).Characters.Num() )
+		{
+			FFontPage& PageInfo = Font->Pages(Page);
+			if( !PageInfo.Texture )
+				continue;
+
+			FFontCharacter& Char = PageInfo.Characters(Index);
+			if( bHaveCharacter )
+				X += Canvas->SpaceX * Scale;
+
+			Canvas->DrawTile
+			(
+				PageInfo.Texture,
+				Canvas->OrgX + X,
+				Canvas->OrgY + Y,
+				Char.USize * Scale,
+				Char.VSize * Scale,
+				Char.StartU,
+				Char.StartV,
+				Char.USize,
+				Char.VSize,
+				NULL,
+				Canvas->Z,
+				DrawColor,
+				NoFog,
+				PolyFlags
+			);
+			X += Char.USize * Scale;
+			bHaveCharacter = 1;
+		}
+	}
+}
+#endif
+
 /*-----------------------------------------------------------------------------
 	Object class implementation.
 -----------------------------------------------------------------------------*/
@@ -1751,6 +1829,97 @@ void UGameEngine::Draw( UViewport* Viewport, UBOOL Blit, BYTE* HitData, INT* Hit
 			Viewport->Console->PostRender( Frame );
 			Viewport->Console->eventPostRender( Viewport->Canvas );
 		}
+
+#if defined(PLATFORM_ANDROID)
+		// UT99_ANDROID_V200_BUILD_LABEL:
+		// UT's UWindow desktop does not use PlayerPawn.bShowMenu.  The active
+		// WindowConsole instead runs in its scripted UWindow state.  Detect both
+		// menu systems and reset the canvas to the full viewport before drawing,
+		// because UWindow child painting can leave a small origin/clip rectangle
+		// behind.  Without that reset the label is drawn outside the final clip.
+		UBOOL bUT99AndroidMenuVisible = Viewport->Actor && Viewport->Actor->bShowMenu;
+		if( Viewport->Console )
+		{
+			FStateFrame* ConsoleState = Viewport->Console->GetStateFrame();
+			if( ConsoleState && ConsoleState->StateNode )
+			{
+				static FName NAME_UT99AndroidUWindow( TEXT("UWindow") );
+				bUT99AndroidMenuVisible |= ConsoleState->StateNode->GetFName() == NAME_UT99AndroidUWindow;
+			}
+		}
+
+		if( bUT99AndroidMenuVisible && Viewport->Canvas && Viewport->Canvas->SmallFont )
+		{
+#ifdef PLATFORM_64BIT
+			const TCHAR* PlatformText = TEXT("64-bit");
+#else
+			const TCHAR* PlatformText = TEXT("32-bit");
+#endif
+			// UT99_ANDROID_V200_RUNTIME_VERSION:
+			// GameActivity exports the installed APK's BuildConfig.VERSION_NAME
+			// before SDL loads the engine.  Reading it at runtime avoids stale
+			// native labels when Gradle/CMake caches survive a version update.
+			const ANSICHAR* RuntimeVersionAnsi = getenv( "UT99_ANDROID_VERSION_NAME" );
+			const TCHAR* VersionText = (RuntimeVersionAnsi && RuntimeVersionAnsi[0])
+				? appFromAnsi( RuntimeVersionAnsi )
+				: TEXT("unknown");
+			UCanvas* Canvas = Viewport->Canvas;
+
+			// Preserve every canvas field touched by UWindow/text rendering.
+			UFont* SavedFont       = Canvas->Font;
+			FColor SavedColor      = Canvas->Color;
+			FLOAT SavedOrgX        = Canvas->OrgX;
+			FLOAT SavedOrgY        = Canvas->OrgY;
+			FLOAT SavedClipX       = Canvas->ClipX;
+			FLOAT SavedClipY       = Canvas->ClipY;
+			FLOAT SavedCurX        = Canvas->CurX;
+			FLOAT SavedCurY        = Canvas->CurY;
+			FLOAT SavedCurYL       = Canvas->CurYL;
+			FLOAT SavedZ           = Canvas->Z;
+			BYTE SavedStyle        = Canvas->Style;
+			BITFIELD SavedCenter   = Canvas->bCenter;
+			BITFIELD SavedNoSmooth = Canvas->bNoSmooth;
+
+			Canvas->SetClip( 0, 0, Canvas->X, Canvas->Y );
+			Canvas->Font      = Canvas->SmallFont;
+			Canvas->Color     = FColor(210,210,210);
+			Canvas->Style     = STY_Normal;
+			Canvas->Z         = 1.f;
+			Canvas->bCenter   = 0;
+			Canvas->bNoSmooth = 1;
+
+			// V2.0: render Engine.SmallFont at an exact 3x scale.
+			TCHAR BuildLabel[128];
+			appSprintf( BuildLabel, TEXT("UT99 Android %s (%s)"), VersionText, PlatformText );
+			static UBOOL bRuntimeVersionLogged = 0;
+			if( !bRuntimeVersionLogged )
+			{
+				debugf( NAME_Init, TEXT("UT99 Android menu build label: %s"), BuildLabel );
+				bRuntimeVersionLogged = 1;
+			}
+			const FLOAT LabelScale = 3.f;
+			FLOAT LabelW=0.f, LabelH=0.f;
+			UT99AndroidMeasureScaledText( Canvas->SmallFont, BuildLabel, LabelScale, Canvas->SpaceX, LabelW, LabelH );
+			Canvas->CurX = Max<FLOAT>( 4.f, Canvas->ClipX - LabelW - 12.f );
+			Canvas->CurY = Max<FLOAT>( 4.f, Canvas->ClipY - LabelH - 9.f );
+			UT99AndroidDrawScaledText( Canvas, Canvas->SmallFont, BuildLabel, Canvas->CurX, Canvas->CurY, LabelScale );
+
+			Canvas->Font      = SavedFont;
+			Canvas->Color     = SavedColor;
+			Canvas->OrgX      = SavedOrgX;
+			Canvas->OrgY      = SavedOrgY;
+			Canvas->ClipX     = SavedClipX;
+			Canvas->ClipY     = SavedClipY;
+			Canvas->CurX      = SavedCurX;
+			Canvas->CurY      = SavedCurY;
+			Canvas->CurYL     = SavedCurYL;
+			Canvas->Z         = SavedZ;
+			Canvas->Style     = SavedStyle;
+			Canvas->bCenter   = SavedCenter;
+			Canvas->bNoSmooth = SavedNoSmooth;
+		}
+#endif
+
 		if( Audio )
 			Audio->PostRender( Frame );
 

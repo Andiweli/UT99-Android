@@ -450,13 +450,13 @@ inline void* appRealloc( void* Original, DWORD Count, const TCHAR* Tag )
 //
 // C++ style memory allocation.
 //
-inline void* operator new( unsigned int Size, const TCHAR* Tag )
+inline void* operator new( size_t Size, const TCHAR* Tag )
 {
 	guardSlow(new);
 	return appMalloc( Size, Tag );
 	unguardSlow;
 }
-inline void* operator new( unsigned int Size )
+inline void* operator new( size_t Size )
 {
 	guardSlow(new);
 	return appMalloc( Size, TEXT("new") );
@@ -470,13 +470,13 @@ inline void operator delete( void* Ptr )
 }
 
 #if PLATFORM_NEEDS_ARRAY_NEW
-inline void* operator new[]( unsigned int Size, const TCHAR* Tag )
+inline void* operator new[]( size_t Size, const TCHAR* Tag )
 {
 	guardSlow(new);
 	return appMalloc( Size, Tag );
 	unguardSlow;
 }
-inline void* operator new[]( unsigned int Size )
+inline void* operator new[]( size_t Size )
 {
 	guardSlow(new);
 	return appMalloc( Size, TEXT("new") );

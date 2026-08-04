@@ -290,6 +290,17 @@ void UNOpenGLESRenderDevice::InternalClassInitializer( UClass* Class )
 	unguardSlow;
 }
 
+//
+// UT-era static construction hook. InternalClassInitializer belongs to a
+// later UE1 initialization path and otherwise never registers these options.
+//
+void UNOpenGLESRenderDevice::StaticConstructor()
+{
+	guard(UNOpenGLESRenderDevice::StaticConstructor);
+	InternalClassInitializer( StaticClass() );
+	unguard;
+}
+
 UNOpenGLESRenderDevice::UNOpenGLESRenderDevice()
 {
 	// UT99_ANDROID_V138_VISUAL_GAMEPLAY_DEFAULTS:

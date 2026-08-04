@@ -74,7 +74,7 @@ void UInput::StaticInitInput()
 		if( InputKeys->Names(i)!=NAME_None )
 		{
 			const TCHAR* Str = *InputKeys->Names(i);
-			new(StaticClass(),Str+3,RF_Public)UStrProperty( EC_CppProperty, (INT)&((UInput*)NULL)->Bindings[i], TEXT("RawKeys"), CPF_Config );
+			new(StaticClass(),Str+3,RF_Public)UStrProperty( EC_CppProperty, (INT)(UPTRINT)&((UInput*)NULL)->Bindings[i], TEXT("RawKeys"), CPF_Config );
 		}
 	}
 	StaticClass()->Link( ArDummy, 0 );

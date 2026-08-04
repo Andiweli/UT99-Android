@@ -1281,7 +1281,7 @@ static void global_Flicker( AActor* Owner, FLOAT& Brightness, FVector& Color )
 {
 	guardSlow(global_Flicker);
 
-	FLOAT Random = GRandoms->RandomBase((int)Owner);
+	FLOAT Random = GRandoms->RandomBase((int)(UPTRINT)Owner);
 	if( Random < 0.5 )	Brightness = 0.0;
 	else				Brightness *= Random;
 	unguardSlow;

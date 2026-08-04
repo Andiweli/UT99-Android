@@ -6,10 +6,11 @@ Revision history:
 	* Created by Brandon Reinhart.
 =============================================================================*/
 
-#include "LaunchPrivate.h"
 #ifdef PLATFORM_SDL
 #include <SDL2/SDL.h>
 #endif
+#include <limits.h>
+#include "LaunchPrivate.h"
 #ifdef PLATFORM_ANDROID
 #include <android/log.h>
 #define UT99_ANDROID_LOGI(...) __android_log_print(ANDROID_LOG_INFO, "UT99Launch", __VA_ARGS__)

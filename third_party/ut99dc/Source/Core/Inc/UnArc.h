@@ -30,7 +30,7 @@ public:
 	}
 	virtual void SerializeInt( DWORD& Value, DWORD Max )
 	{
-		*this << *(DWORD*)Value;
+		*this << Value;
 	}
 	virtual void Preload( UObject* Object )
 	{}

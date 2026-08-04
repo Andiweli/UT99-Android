@@ -5,9 +5,24 @@ if(NOT ANDROID)
     message(FATAL_ERROR "This CMake entry point is intended for the Android NDK only.")
 endif()
 
-if(NOT ANDROID_ABI STREQUAL "armeabi-v7a")
-    message(FATAL_ERROR "UT99DC Android package is intentionally 32-bit only. Select armeabi-v7a, not ${ANDROID_ABI}.")
+if(NOT ANDROID_ABI STREQUAL "armeabi-v7a" AND NOT ANDROID_ABI STREQUAL "arm64-v8a")
+    message(FATAL_ERROR "UT99DC Android supports armeabi-v7a and arm64-v8a, not ${ANDROID_ABI}.")
 endif()
+
+# ANDROID_ARM_MODE/ANDROID_ARM_NEON are Android-toolchain configuration
+# variables for 32-bit ARM only. Supplying them globally makes CMake abort
+# while configuring arm64-v8a. Preserve the former full ARM instruction mode
+# for the OUYA/armeabi-v7a build as a compiler option after project() instead.
+if(ANDROID_ABI STREQUAL "armeabi-v7a")
+    add_compile_options(-marm)
+    message(STATUS "UT99 Android ABI: armeabi-v7a (ARM instruction mode, no mandatory NEON)")
+else()
+    message(STATUS "UT99 Android ABI: arm64-v8a (native AArch64; Android API 21 minimum)")
+endif()
+
+# The visible in-game build label is supplied at runtime by GameActivity
+# from BuildConfig.VERSION_NAME.  Do not hardcode it in CMake: an old .cxx
+# cache could otherwise leave the native menu label on an earlier version.
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -23,7 +38,7 @@ set(UT99DC_SOURCE_DIR "${UT99DC_ROOT}/Source")
 # UT99_ANDROID_UMX_LIBXMP_V4_BEGIN
 # Link libxmp like the working Unreal Android 1.4.3 music path: as a real
 # native dependency, not via dlopen().  The .so is supplied by the user under
-# app/src/main/jniLibs/armeabi-v7a/libxmp.so and is also packaged by Gradle.
+# app/src/main/jniLibs/${ANDROID_ABI}/libxmp.so and is also packaged by Gradle.
 set(UT99_LIBXMP_SO "${CMAKE_CURRENT_LIST_DIR}/../jniLibs/${ANDROID_ABI}/libxmp.so")
 set(UT99_LIBXMP_INCLUDE_DIR "${CMAKE_CURRENT_LIST_DIR}/android/include")
 if(EXISTS "${UT99_LIBXMP_SO}")
@@ -102,18 +117,15 @@ set(PLATFORM_DREAMCAST OFF CACHE BOOL "" FORCE)
 add_compile_definitions(
         PLATFORM_ANDROID=1
         ANDROID=1
-        PLATFORM_32BIT=1
         PLATFORM_LITTLE_ENDIAN=1
 )
 
-# v21: UE1 was originally built with 4-byte struct packing on Win32 (/Zp4).
-# Android/Clang ARM uses different default alignment, which breaks reflected
-# native class sizes, first visible as:
-#   sizeof(UFireTexture) != UFireTexture::StaticClass()->GetPropertiesSize()
-# Apply 4-byte packing only after SDL2 has been configured, so it affects
-# ut99dc targets but not SDL2 itself.
+# UT99_ANDROID_V175_64BIT_PORT:
+# UE1 native/script mirror classes require 4-byte packing, but applying
+# -fpack-struct=4 globally also changes unrelated C/C++ and system structures.
+# The 64-bit port now applies explicit #pragma pack(push,4) only around the
+# native mirror declarations. Keep only the diagnostic suppression here.
 add_compile_options(
-        -fpack-struct=4
         -Wno-address-of-packed-member
 )
 

@@ -131,14 +131,16 @@ inline INT FFrame::ReadInt()
 }
 inline UObject* FFrame::ReadObject()
 {
+	// Compiled UE1 bytecode stores object references as a fixed 4-byte
+	// GObjObjects index. Native pointers may be 8 bytes on arm64.
 #if defined(PLATFORM_DREAMCAST) || defined(PLATFORM_ANDROID)
-	UObject* Result;
-	__builtin_memcpy( &Result, Code, sizeof( Result ) );
+	INT Index;
+	__builtin_memcpy( &Index, Code, sizeof( Index ) );
 #else
-	UObject* Result = *(UObject**)Code;
+	INT Index = *(INT*)Code;
 #endif
 	Code += sizeof(INT);
-	return Result;
+	return UObject::GetIndexedObject( Index );
 }
 inline FLOAT FFrame::ReadFloat()
 {

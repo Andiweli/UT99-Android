@@ -16,26 +16,30 @@ android {
     defaultConfig {
         applicationId 'com.ast.ut99'
         minSdk 16          // Android 4.1.2 / OUYA
-        targetSdk 28       // keeps legacy storage behaviour friendlier for old sideload devices
-        versionCode 2
-        versionName '1.7.4'
+        // Android 15 warns about sideloaded apps targeting more than two API
+        // levels below the device. API 33 removes that warning on Android 15
+        // while minSdk 16 continues to preserve Android 4.1.2 / OUYA support.
+        targetSdk 33
+        versionCode 8
+        versionName '2.0'
 
         ndk {
-            abiFilters 'armeabi-v7a'
+            abiFilters 'armeabi-v7a', 'arm64-v8a'
         }
 
         externalNativeBuild {
             cmake {
-                abiFilters 'armeabi-v7a'
+                abiFilters 'armeabi-v7a', 'arm64-v8a'
                 cppFlags '-std=c++17 -fexceptions -frtti -fsigned-char -DANDROID -DPLATFORM_ANDROID'
                 // UT99_ANDROID_V78_OUYA_STATIC_STL_FIX:
                 // Android 4.1.2 / OUYA failed to resolve the transitive
                 // libc++_shared.so dependency while loading libut99dc_android_bridge.so.
                 // Link the small bridge and UE entry libraries against the static
                 // C++ runtime so no external libc++_shared.so is required at startup.
-                arguments '-DANDROID_STL=c++_static',
-                        '-DANDROID_ARM_MODE=arm',
-                        '-DANDROID_ARM_NEON=FALSE'
+                // ABI-neutral options only. ARMv7-specific compiler flags are
+                // selected inside CMakeLists.txt after CMake knows ANDROID_ABI;
+                // passing ANDROID_ARM_MODE to arm64-v8a aborts configuration.
+                arguments '-DANDROID_STL=c++_static'
             }
         }
     }
@@ -71,10 +75,4 @@ android {
         }
     }
 
-    lint {
-        // This APK is intended for sideload/testing. Keep targetSdk 28 for the
-        // current legacy storage/runtime behaviour and only silence the Play
-        // target-SDK lint gate for release assembly.
-        disable 'ExpiredTargetSdkVersion'
-    }
 }

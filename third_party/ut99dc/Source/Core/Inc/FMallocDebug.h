@@ -99,7 +99,7 @@ public:
 				appFree( InPtr );
 			return NULL;
 		}
-		unguardf(( TEXT("%08X %i %s"), (INT)InPtr, NewSize, Tag ));
+		unguardf(( TEXT("%p %i %s"), InPtr, NewSize, Tag ));
 	}
 	void Free( void* InPtr )
 	{

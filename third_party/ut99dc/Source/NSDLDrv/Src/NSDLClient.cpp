@@ -36,6 +36,17 @@ void UNSDLClient::InternalClassInitializer( UClass* Class )
 }
 
 //
+// UT-era static construction hook. InternalClassInitializer is a later UE1
+// hook and is not called by this engine generation.
+//
+void UNSDLClient::StaticConstructor()
+{
+	guard(UNSDLClient::StaticConstructor);
+	InternalClassInitializer( StaticClass() );
+	unguard;
+}
+
+//
 // UNSDLClient constructor.
 //
 UNSDLClient::UNSDLClient()

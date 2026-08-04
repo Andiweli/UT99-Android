@@ -205,10 +205,10 @@ void AStatLogFile::execOpenLog( FFrame& Stack, RESULT_DECL )
 	P_FINISH;
 
 	GFileManager->MakeDirectory( TEXT("..") PATH_SEPARATOR TEXT("Logs") );
-	LogAr = (INT) GFileManager->CreateFileWriter( *StatLogFile, FILEWRITE_EvenIfReadOnly );
+	LogAr = (PTRINT) GFileManager->CreateFileWriter( *StatLogFile, FILEWRITE_EvenIfReadOnly );
 	if( bWorld )
 	{
-		Context = (INT) new FMD5Context;
+		Context = (PTRINT) new FMD5Context;
 		appMD5Init((FMD5Context*) Context);
 	}
 	unguardexec;

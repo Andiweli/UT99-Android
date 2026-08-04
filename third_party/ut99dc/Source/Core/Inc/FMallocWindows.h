@@ -234,7 +234,7 @@ public:
 		}
 		MEM_TIME(MemTime += appSeconds());
 		return NewPtr;
-		unguardf(( TEXT("%08X %i %s"), (INT)Ptr, NewSize, Tag ));
+		unguardf(( TEXT("%p %i %s"), Ptr, NewSize, Tag ));
 	}
 	void Free( void* Ptr )
 	{

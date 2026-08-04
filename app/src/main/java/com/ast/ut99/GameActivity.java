@@ -16,8 +16,8 @@ import java.io.File;
 /**
  * SDL entry point for the UT99 Dreamcast-code Android port.
  *
- * This intentionally stays 32-bit only. The Gradle/CMake configuration restricts
- * the native build to armeabi-v7a for Android 4.1.2 / OUYA-class devices.
+ * The APK contains both armeabi-v7a and arm64-v8a engine builds. Android selects
+ * the matching ABI automatically; OUYA continues to use the 32-bit ARMv7 build.
  */
 public class GameActivity extends SDLActivity {
     private static final String TAG = "UT99Android";
@@ -97,7 +97,7 @@ public class GameActivity extends SDLActivity {
         }
     }
 
-    private static native boolean nativePrepareProcess(String dataRoot, String homeDir);
+    private static native boolean nativePrepareProcess(String dataRoot, String homeDir, String versionName);
     private static native void nativeAndroidTextV82(String text);
     private static native boolean nativeAndroidIsMenuV92(); // UT99_ANDROID_V92_TOUCH_OVERLAY
 
@@ -169,10 +169,12 @@ public class GameActivity extends SDLActivity {
             Toast.makeText(this, "UT99 ini setup failed: " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
 
-        boolean nativeOk = nativePrepareProcess(dataRoot.getAbsolutePath(), homeDir.getAbsolutePath());
+        boolean nativeOk = nativePrepareProcess(dataRoot.getAbsolutePath(), homeDir.getAbsolutePath(), BuildConfig.VERSION_NAME);
         if (!nativeOk) {
             Log.e(TAG, "nativePrepareProcess failed; engine may not find its data path");
             Toast.makeText(this, "UT99 native path setup failed", Toast.LENGTH_LONG).show();
+        } else {
+            Log.i(TAG, "Runtime build label exported to engine: " + BuildConfig.VERSION_NAME);
         }
 
         android.util.Log.i("UT99Android", "UT99_ANDROID_V63_CITYINTRO_AUDIO_SAFE_START direct CityIntro.unr startup");
@@ -389,17 +391,31 @@ public class GameActivity extends SDLActivity {
      */
     @Override
     protected String[] getLibraries() {
-        return new String[] {
-                "SDL2",
-                // UT99_ANDROID_V137_OUYA_LIBXMP_PRELOAD:
-                // Android 4.1.2 / OUYA does not reliably resolve native
-                // DT_NEEDED dependencies from the app lib directory when
-                // libUnrealTournament.so is loaded.  Preload libxmp explicitly
-                // before UnrealTournament so the direct-linked UMX music backend
-                // can start on OUYA as well as newer Android devices.
-                "xmp",
-                "UnrealTournament"
-        };
+        final java.util.ArrayList<String> libraries = new java.util.ArrayList<String>();
+        libraries.add("SDL2");
+
+        // UT99_ANDROID_V175_ABI_SAFE_LIBXMP_PRELOAD:
+        // libxmp must be loaded before UnrealTournament for both supported ABIs.
+        // Check Android's selected native-library directory so the app loads
+        // only the libxmp.so matching the ABI chosen by the package manager.
+        // This keeps ARMv7/OUYA and ARM64 in one APK without cross-ABI loading.
+        boolean hasSelectedAbiXmp = false;
+        try {
+            final android.content.pm.ApplicationInfo appInfo = getApplicationInfo();
+            final String nativeDir = appInfo != null ? appInfo.nativeLibraryDir : null;
+            hasSelectedAbiXmp = nativeDir != null
+                    && new java.io.File(nativeDir, System.mapLibraryName("xmp")).isFile();
+            Log.i(TAG, "Selected-ABI libxmp available=" + hasSelectedAbiXmp
+                    + " nativeLibraryDir=" + nativeDir);
+        } catch (Throwable t) {
+            Log.w(TAG, "Could not inspect selected ABI native library directory", t);
+        }
+        if (hasSelectedAbiXmp) {
+            libraries.add("xmp");
+        }
+
+        libraries.add("UnrealTournament");
+        return libraries.toArray(new String[libraries.size()]);
     }
 
     /**
