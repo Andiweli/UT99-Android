@@ -18,10 +18,10 @@
 
 
 > [!NOTE]
-> Unofficial fan port.
-> No game data included.
-> Several bugs with triggers and events not starting 100%.
-> Requires legally obtained Unreal Tournament v1.400 game files.
+> Unofficial fan port.  
+> No game data included.  
+> Several bugs with triggers and events not starting 100%.  
+> Requires legally obtained Unreal Tournament v1.400 game files.  
 > This project is not official and is not endorsed by Epic Games.
 
 > [!IMPORTANT]
