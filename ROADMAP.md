@@ -21,8 +21,7 @@
 - [x] OUYA controller support
 - [x] Add Android mouse support
 - [x] Touchscreen overlay
-- [ ] Fix Keyboard input
 
 ## Not planned / not in the scope of this project
 
-- [ ] Full 64-bit gameplay parity with 32-bit build
+- [x] Full 64-bit gameplay parity with 32-bit build
