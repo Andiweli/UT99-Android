@@ -10,7 +10,7 @@
   <a href="https://github.com/Andiweli/UT99-Android/releases">DOWNLOAD</a>
 </p>
 
-![Android 13](https://img.shields.io/badge/OS-up%20to%20Android%2013-green)
+![Android 15](https://img.shields.io/badge/OS-up%20to%20Android%2015-green)
 ![ABI](https://img.shields.io/badge/ABI-DualABI%2032%2F64bit-orange.svg)
 ![AI](https://img.shields.io/badge/AI-assisted%20coding-6e7781)
 ![Controller](https://img.shields.io/badge/Controls-Touch/Controller-blueviolet)
