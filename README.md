@@ -1,6 +1,5 @@
 <img width="2172" height="724" alt="image" src="https://github.com/Andiweli/UT99-Android/blob/master/images/unreal-header.jpg" />
 
-
 # Unreal Tournament (UT99) Android
 
 <p align="left">
@@ -12,7 +11,7 @@
 </p>
 
 ![Android 13](https://img.shields.io/badge/OS-up%20to%20Android%2013-green)
-![ABI](https://img.shields.io/badge/ABI-armeabi--v7a/32bit-orange)
+![ABI](https://img.shields.io/badge/ABI-DualABI%2032%2F64bit-orange.svg)
 ![AI](https://img.shields.io/badge/AI-assisted%20coding-6e7781)
 ![Controller](https://img.shields.io/badge/Controls-Touch/Controller-blueviolet)
 ![Multiplayer](https://img.shields.io/badge/Multiplayer-local%20WiFi-blueviolet)
@@ -26,9 +25,6 @@
 > This project is not official and is not endorsed by Epic Games.
 
 > [!IMPORTANT]
-> **This app is 32 bit only!** It won't install on your phone? Then it might only accept 64 bit apps. 
-> There are no plans on making this app compatible with 64 bit only CPUs. 
-> 
 > Video games on smartphones are great, but not user-friendly if they require more than two thumbs to control. For this reason, this port is designed for controller input only and does only offer basic touchscreen controls.
 >
 > This project is for preservation, experimentation and personal use only.  
@@ -47,7 +43,7 @@
 
 ## ◈ Features
 
-- Android support for newer Android devices up to Android 13 (no 64 bit devices).
+- Android support for newer Android devices up to Android 15.
 - OUYA (Android 4.x) legacy support - with a lower internal render resolution for better performance on legacy hardware.
 - Improved Game Data Import – Unreal Tournament data can be imported via folder or ZIP selection and automatically installs to the app's data folder.
 - Android 8+ Storage Access Fixed – SAF support added for modern Android versions where direct SD/file access is restricted.
@@ -64,7 +60,7 @@
 
 - Android device with OpenGL ES 2.0 support.
 - Android 4.1 / API 16 or newer.
-- ARMv7 compatible device for the current build.
+- ARMv7 or ARMv8 compatible device for the current build.
 - Android-compatible game controller recommended.
 - Original Unreal Tournament / UT99 [PC game data v400](https://archive.org/download/ut-99_202512/UT99.iso).
 
