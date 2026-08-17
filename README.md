@@ -13,7 +13,7 @@
 ![OS](https://img.shields.io/badge/up%20to-Android%2016-green)
 ![Architecture](https://img.shields.io/badge/architecture-32/64bit-orange.svg)
 ![AI](https://img.shields.io/badge/AI-assisted%20coding-6e7781)
-![Controller](https://img.shields.io/badge/Controls-Touch/Controller-blueviolet)
+![Controller](https://img.shields.io/badge/Controls-Joypad/Touch-blueviolet)
 ![Multiplayer](https://img.shields.io/badge/Multiplayer-local%20WiFi-blueviolet)
 [![Support via PayPal](https://img.shields.io/badge/Support%20via-PayPal-0070BA?logo=paypal\&logoColor=white)](https://paypal.me/andiweli)
 
