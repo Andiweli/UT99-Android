@@ -20,8 +20,8 @@ android {
         // levels below the device. API 33 removes that warning on Android 15
         // while minSdk 16 continues to preserve Android 4.1.2 / OUYA support.
         targetSdk 33
-        versionCode 8
-        versionName '2.0'
+        versionCode 13
+        versionName '2.1.0'
 
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'

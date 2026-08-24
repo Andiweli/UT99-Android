@@ -1,0 +1,76 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="Высокая скорость"
+IdealPlayerCount="4-10"
+LevelEnterText="Получите контроль над поездом!! НЕТ МИЛОСЕРДИЯ!!"
+
+[ZoneInfo8]
+ZoneName="3-й вагон"
+
+[ZoneInfo10]
+ZoneName="1-й вагон"
+
+[ZoneInfo9]
+ZoneName="2-й вагон"
+
+[SpecialEvent0]
+DamageString="%s упал между вагонами. Это больно..."
+
+[LevelSummary]
+LevelEnterText="Получите контроль над поездом!! НЕТ МИЛОСЕРДИЯ!!"
+Title="Высокая скорость"
+IdealPlayerCount="4-10"
+
+[AssaultInfo0]
+ObjDesc[0]="Проберитесь в головной вагон. В нём, на втором этаже вы найдете пульт, который открывает дверь в кабину управления на первом этаже. Активируйте его."
+ObjDesc[1]="Спрыгните вниз в кабину управления. Там вы найдете панель управления поездом."
+
+[FortStandard0]
+FortName="Кабина"
+DestroyedMessage="захвачена!!"
+
+[SpecialEvent9]
+Message="ПОЕЗД ЗАХВАЧЕН!!"
+
+[FortStandard1]
+FortName="В вагон № 3"
+DestroyedMessage="вот-вот проникнут!!"
+
+[FortStandard2]
+FortName="В вагон № 2"
+DestroyedMessage="вот-вот проникнут!!"
+
+[FortStandard3]
+FortName="В вагон № 1"
+DestroyedMessage="вот-вот проникнут!!"
+
+[SpecialEvent1]
+DamageString="%s порублен лопастями вертолета..."
+
+[FortStandard4]
+FortName="Пульт доступа в кабину управления"
+DestroyedMessage="активирован!!"
+
+[SpecialEvent3]
+Message="Нападающие на крыше!!!"
+
+[ZoneInfo0]
+ZoneName="На крыше первого вагона"
+
+[SlimeZone0]
+ZoneName="Цистерна с кислотой"
+
+[locationid5]
+LocationName="Платформа со столбами"
+
+[locationid6]
+LocationName="Платформа с резервуарами"
+
+[locationid7]
+LocationName="Пустая платформа"
+
+[locationid4]
+LocationName="Цистерна с кислотой"

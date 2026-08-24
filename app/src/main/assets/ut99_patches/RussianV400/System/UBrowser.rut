@@ -1,0 +1,196 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[ServerListTitles]
+UBrowserUT="Серверы UT"
+UBrowserLAN="Локальные серверы"
+UBrowserPopulated="Серверы с игроками"
+UBrowserDeathmatch="Бой насмерть"
+UBrowserTeamGames="Командный бой"
+UBrowserCTF="Захват флага"
+UBrowserDOM="Доминирование"
+UBrowserAS="Штурм"
+UBrowserLMS="Последний герой"
+UBrowserAll="Все серверы"
+
+[UBrowserIRCSystemPage]
+NotInAChannelText="Не в канале!"
+KickedFromText="Вы были исключены из"
+ByText="модератором"
+IsAwayText="не на месте"
+
+[UBrowserIRCPageBase]
+HasLeftText="покинул канал"
+HasJoinedText="присоединился"
+WasKickedByText="исключён: "
+NowKnownAsText="теперь зовут"
+QuitText="Выход"
+SetsModeText="устанавливает режим"
+
+[UBrowserServerListWindow]
+PlayerCountName="Игроков"
+ServerCountName="Серверов"
+QueryServerText="Отправка запроса на Мастер-сервер (нажмите F5, если ничего не происходит)"
+QueryFailedText="Сбой Мастер-сервера: "
+PingingText="Пинг серверов"
+CompleteText="Завершено"
+InfoName="Инфо"
+
+[UBrowserServerPing]
+AdminEmailText="Email админа"
+AdminNameText="Имя админа"
+MultiplayerBotsText="Боты в сетевой игре"
+FragLimitText="Лимит фрагов"
+TimeLimitText="Лимит времени"
+GameModeText="Режим игры"
+GameTypeText="Режим игры"
+GameVersionText="Версия игры"
+WorldLogText="ngStats World Stat-логгирование"
+MutatorsText="Мутаторы"
+TrueString="Вкл."
+FalseString="Выкл."
+ServerAddressText="Адрес сервера"
+GoalTeamScoreText="Требуется очков команды"
+MaxTeamsText="Макс. команд"
+FriendlyFireText="Урон огня по своим"
+MinPlayersText="Боты входят в игру для мин. из"
+PlayersText="игроков"
+ChangeLevelsText="Смена уровня"
+BalanceTeamsText="Боты балансируют команды"
+BotSkillText="Мастерство ботов"
+MinNetVersionText="Мин. совместимая версия"
+
+[UBrowserIRCLink]
+InvalidAddressText="Неверный адрес сервера, отключение."
+ErrorBindingText="Ошибка привязки локального порта, отключение."
+ResolveFailedText="Не удалось определить адрес сервера, отключение."
+ConnectedText="Подключено."
+ConnectingToText="Соединение с"
+TimeOutError="Превышено время подключения к серверу."
+InviteString="приглашает вас присоединиться"
+
+[UBrowserMainWindow]
+WindowTitleString="Сервер-браузер Unreal Tournament"
+
+[UBrowserOpenBar]
+OpenText="Открыть:"
+OpenHelp="Введите URL или выберите адрес из истории. Нажмите Enter для подключения."
+
+[UBrowserIRCSetupClient]
+ServerText="IRC-сервер"
+ChannelText="Канал по умолчанию"
+ServerHelp="Выберите IRC-сервер из списка или введите собственное имя или IP-адрес IRC-сервера."
+ChannelHelp="Выберите канал по умолчанию для входа после подключения к серверу или введите имя канала."
+ConnectText="Подключиться"
+DisconnectText="Отключиться"
+ConnectHelp="Подключиться к серверу IRC-чата."
+DisconnectHelp="Отключиться от сервера IRC-чата."
+WarningText="Функция чата соединит вас с сетью Internet Relay Chat (IRC).\n\nEpic Games не несёт ответственности за содержимое каналов IRC. Вы входите в них на свой страх и риск.\n\nВы действительно хотите подключиться?"
+WarningTitle="Внимание"
+
+[UBrowserServerGrid]
+ServerName="Сервер"
+PingName="Пинг"
+MapNameName="Имя карты"
+PlayersName="Игроки"
+
+[UBrowserRightClickMenu]
+PlayName="Играть на этом сервере (&P)"
+RefreshName="Обновить все серверы (&R)"
+InfoName="Сведения о сервере и игроках (&S)"
+FavoritesName="Добавить в Избранное (&F)"
+RemoveFavoritesName="Удалить из Избранного (&F)"
+RefreshServerName="Пинговать этот сервер (&P)"
+PingAllName="Пинговать все серверы (&A)"
+OpenLocationName="Открыть адрес (&L)"
+CopyName="Скопировать адрес сервера (&C)"
+
+[UBrowserMainClientWindow]
+FavoritesName="Избранное"
+IRCName="Чат"
+MOTDName="Новости"
+
+[UBrowserInfoMenu]
+RefreshName="Обновить инфо (&R)"
+CloseName="Закрыть (&C)"
+
+[UBrowserUpdateServerWindow]
+QueryText="Запрос серверу..."
+FailureText="Сервер не отвечает."
+
+[UBrowserGSpyLink]
+ResolveFailedError="Не удаётся найти мастер-сервер: "
+TimeOutError="Превышено время ожидания мастер-сервера"
+CouldNotConnectError="Превышено время соединения с мастер-сервером: "
+
+[UBrowserPlayerGrid]
+NameText="Имя"
+FragsText="Фраги"
+PingText="Пинг"
+TeamText="Команда"
+MeshText="Модель"
+SkinText="Скин"
+FaceText="Лицо"
+IDText="ID"
+
+[UBrowserSubsetFact]
+NotFoundError="Не удаётся найти окно: "
+NotReadyError="Окно не готово: "
+
+[UBrowserHTTPLink]
+ResolveFailedError="Не удалось найти мастер-сервер: "
+TimeOutError="Превышено время ожидания мастер-сервера"
+CouldNotConnectError="Превышено время соединения с мастер-сервером: "
+
+[UBrowserRulesGrid]
+RuleText="Правило"
+ValueText="Значение"
+
+[UBrowserIRCWindow]
+SystemName="Система"
+
+[UBrowserIRCSystemMenu]
+ConnectText="Подключиться (&C)"
+DisconnectText="Отключиться (&D)"
+JoinText="Зайти (&J)"
+
+[UBrowserIRCChannelMenu]
+PartText="Покинуть (&L)"
+JoinText="Присоединиться (&J)"
+
+[UBrowserIRCPrivateMenu]
+CloseText="Закрыть (&C)"
+JoinText="Зайти (&J)"
+
+[UBrowserEditFavoriteWindow]
+WindowTitle="Редактировать избранное"
+OKText="ОК"
+
+[UBrowserOpenWindow]
+OKText="ОК"
+WindowTitle="Открыть адрес"
+
+[UBrowserNewFavoriteWindow]
+WindowTitle="Добавить в Избранное"
+OKText="Новый"
+
+[UBrowserEditFavoriteCW]
+DescriptionText="Описание"
+UpdateDescriptionText="Автообновление описания"
+IPText="IP-адрес сервера"
+GamePortText="Номер порта сервера"
+QueryPortText="Номер порта запроса"
+
+[UBrowserFavoritesMenu]
+FavoritesName="Удалить из Избранного (&F)"
+EditFavoriteName="Редактировать Избранное (&E)"
+NewFavoriteName="Добавить в Избранное (&N)"
+
+[UBrowserOpenCW]
+OpenText="Открыть:"
+OpenHelp="Введите стандартный URL-адрес или выберите его из истории. Нажмите Enter для подключения."
+
+[UMenuBotSetupBase]
+DefaultsText="Сброс"
+DefaultsHelp="Сбросить настройки всех ботов на значения по умолчанию."

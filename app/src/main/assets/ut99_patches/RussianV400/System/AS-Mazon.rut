@@ -1,0 +1,31 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="Крепость Мазон"
+IdealPlayerCount="8-12"
+
+[FortStandard0]
+FortName="Главные ворота"
+DestroyedMessage="открыты!"
+
+[FortStandard2]
+FortName="Цепь 1"
+
+[AssaultInfo0]
+ObjDesc[0]="Ваш враг использует Таридий, мощный и неустойчивый элемент, в качестве источника энергии для своих боевых машин. Вы должны проникнуть в базу, предварительно уничтожив цепи двух противовесов в западном крыле форта, и открыв тем самым вход в крепость."
+ObjDesc[1]="Дополнительно, вы можете найти панель управления основными воротами и открыть их, что сократит вашим товарищам по команде путь в крепость."
+ObjDesc[2]="Найдите и используйте панель управления доступом, чтобы проникнуть в помещение Таридиевого реактора."
+ObjDesc[3]="Наконец, уничтожьте энергетический кристалл Таридия, чтобы завершить операцию."
+
+[FortStandard5]
+FortName="Кристалл"
+
+[FortStandard6]
+FortName="Помещение реактора"
+DestroyedMessage="открыто!"
+
+[LevelSummary]
+Title="Крепость Мазон"
+IdealPlayerCount="8-12"

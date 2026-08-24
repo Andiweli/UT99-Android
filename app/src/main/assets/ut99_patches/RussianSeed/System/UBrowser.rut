@@ -1,0 +1,40 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+[UBrowserMainWindow]
+WindowTitleString=Браузер серверов Unreal
+
+[UBrowserOpenWindow]
+WindowTitle=Открыть адрес
+OKText=OK
+
+[UBrowserNewFavoriteWindow]
+WindowTitle=Новый избранный сервер
+OKText=Добавить
+
+[UBrowserEditFavoriteWindow]
+WindowTitle=Изменить избранный сервер
+OKText=OK
+
+[UBrowserServerGrid]
+ServerName=Сервер
+PingName=Пинг
+MapNameName=Карта
+PlayersName=Игроки
+
+[UBrowserRightClickMenu]
+PlayName=&Играть на этом сервере
+RefreshServerName=&Проверить этот сервер
+RefreshName=&Обновить все серверы
+PingAllName=Проверить &все серверы
+InfoName=&Информация о сервере и игроках
+FavoritesName=Добавить в &избранное
+OpenLocationName=Открыть &адрес
+CopyName=&Копировать адрес сервера
+
+[UBrowserServerListWindow]
+InfoName=Информация
+PlayerCountName=Игроки
+ServerCountName=Серверы
+QueryServerText=Запрос мастер-сервера
+QueryFailedText=Ошибка мастер-сервера: 
+PingingText=Проверка серверов
+CompleteText=Готово

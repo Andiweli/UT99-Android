@@ -1,0 +1,124 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[Errors]
+NetOpen="Ошибка открытия файла"
+NetWrite="Ошибка записи в файл"
+NetRefused="Сервер отказался отправить %s"
+NetClose="Ошибка закрытия файла"
+NetSize="Несовпадение размера файла"
+NetMove="Ошибка перемещения файла"
+NetInvalid="Получен неверный запрос файла"
+NoDownload="Пакет %s недоступен для загрузки"
+DownloadFailed="Загрузка пакета %s не удалась: %s"
+RequestDenied="Сервер отказал в запросе файла"
+ConnectionFailed="Соединение прервано"
+ChAllocate="Не удалось выделить канал"
+NetAlready="Сеть уже активна"
+NetListen="Не удалось начать прослушивание: нет контекста компоновщика"
+LoadEntry="Не удаётся загрузить Entry: %s"
+InvalidUrl="Неверный URL: %s"
+InvalidLink="Неверная ссылка: %s"
+FailedBrowse="Не удалось войти %s: %s"
+Listen="Не удалось начать прослушивание: %s"
+AbortToEntry="Не удалось; возврат в Entry"
+ServerOpen="Сервер не может открывать сетевые URL"
+ServerListen="Выделенный сервер не может прослушивать: %s"
+Pending="Ожидающее соединение с '%s' не удалось; %s"
+LoadPlayerClass="Не удалось загрузить класс игрока"
+ServerOutdated="Версия сервера устарела"
+
+[Progress]
+CancelledConnect="Попытка соединения прервана"
+RunningNet="%s: %s (%i игроков)"
+NetReceiving="Получение %s: %i/%i"
+NetReceiveOk="Успешно получен %s"
+NetSend="Отправка %s"
+NetSending="Отправка %s: %i/%i"
+Connecting="Соединение..."
+Listening="Ожидание клиентов..."
+Loading="Загрузка"
+Saving="Сохранение"
+Paused="Поставлено на паузу %s"
+ReceiveFile="Получение %s (F10 - отмена)"
+ReceiveSize="Размер %iK, завершено %3.1f%%"
+ConnectingText="Соединение (F10 - отмена):"
+ConnectingURL="unreal://%s/%s"
+
+[Console]
+ClassCaption="Стандартная консоль Unreal"
+LoadingMessage="ЗАГРУЗКА"
+SavingMessage="СОХРАНЕНИЕ"
+ConnectingMessage="СОЕДИНЕНИЕ"
+PausedMessage="ПАУЗА"
+PrecachingMessage="ПОДГОТОВКА"
+ChatChannel="(ЧАТ)"
+TeamChannel="(КОМАНДА)"
+
+[General]
+Upgrade="Для входа на этот сервер требуется последнее бесплатное обновление Unreal Tournament:"
+UpgradeURL="https://www.oldunreal.com/"
+UpgradeQuestion="Открыть страницу обновления в браузере?"
+Version="Версия %i"
+
+[Menu]
+LeftString="Слева"
+RightString="Справа"
+CenterString="В центре"
+EnabledString="Вкл."
+DisabledString="Выкл."
+HelpMessage[1]="Это меню ещё не реализовано."
+YesString="Да"
+NoString="Нет"
+
+[Inventory]
+PickupMessage="Раздобыт предмет"
+M_Activated=" включён."
+M_Selected=" выбран."
+M_Deactivated=" выключен."
+ItemArticle=""
+
+[GameInfo]
+SwitchLevelMessage="Смена уровня"
+DefaultPlayerName="Игрок"
+LeftMessage=" покидает игру."
+FailedSpawnMessage="Не удалось создать игрока"
+FailedPlaceMessage="Не удалось найти точку старта"
+NameChangedMessage="теперь зовут "
+EnteredMessage=" входит в игру."
+GameName="Игра"
+MaxedOutMessage="Сервер уже заполнен."
+WrongPassword="Введён неправильный пароль."
+NeedPassword="Нужно ввести пароль, чтобы присоединиться к игре."
+FailedTeamMessage="Не удалось найти команду для игрока"
+
+[Weapon]
+MessageNoAmmo=" без патронов."
+PickupMessage="Вы взяли оружие"
+ItemName="Оружие"
+
+[Counter]
+CountMessage="Осталось ещё %i..."
+CompleteMessage="Выполнено!"
+
+[Ammo]
+PickupMessage="Вы подобрали патроны"
+
+[DamageType]
+Name="убит"
+AltName="убит"
+
+[PlayerPawn]
+QuickSaveString="Быстрое сохранение"
+NoPauseMessage="Эту игру нельзя поставить на паузу"
+ViewingFrom="Вид от лица "
+OwnCamera="собственной камеры"
+FailedView="Не удалось сменить вид."
+CantChangeNameMsg="Вы не можете сменить имя во время глобально логгируемой игры."
+
+[Pawn]
+NameArticle=" "
+
+[Spectator]
+MenuName="Зритель"

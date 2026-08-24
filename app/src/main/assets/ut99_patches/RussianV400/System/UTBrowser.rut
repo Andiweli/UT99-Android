@@ -1,0 +1,14 @@
+; UT99 Android v2.0.3 - audited v400 Russian localization
+[UTBrowserServerGrid]
+; EN: ngStatsName="Stats Logging"
+ngStatsName="Журнал статистики"
+; EN: EnabledText="Enabled"
+EnabledText="Вкл."
+; EN: AskNgStatsTitle="Use ngWorldStats?"
+AskNgStatsTitle="Использовать ngWorldStats?"
+; EN: AskNgStatsText="This server has stat accumulation enabled. Your ngWorldStats password has not been set. If you set a new ngWorldStats password, you can record all of your gameplay stats (Kills, Suicides, etc) online! If you do not set a password you will opt out of stat accumulation.\n\nDo you want to set an ngWorldStats password?"
+AskNgStatsText="На этом сервере включено накопление статистики. Ваш пароль ngWorldStats не был установлен. Если вы установите новый пароль ngWorldStats, вы сможете записывать всю свою игровую статистику (убийства, самоубийства и т. д.) Онлайн! Если вы не установите пароль, вы откажетесь от накопления статистики.\n\nВы хотите установить пароль ngWorldStats?"
+
+[UTBrowserMainWindow]
+; EN: WindowTitleString="Unreal Tournament Server Browser"
+WindowTitleString="Сервер-браузер Unreal Tournament"

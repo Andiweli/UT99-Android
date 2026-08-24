@@ -1,0 +1,26 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="Фрегат"
+IdealPlayerCount="4-8"
+
+[FortStandard0]
+FortName="Ракеты"
+DestroyedMessage="запущены!"
+
+[FortStandard1]
+FortName="В корабль"
+DestroyedMessage="проникли!"
+
+[FortStandard2]
+FortName="Гидрокомпрессор"
+
+[AssaultInfo0]
+ObjDesc[0]="Дверь в отсек управления заблокирована гидравлическим компрессором, который находится в кормовом отделении. Этот компрессор необходимо уничтожить, чтобы получить доступ в отсек управления."
+ObjDesc[1]="Чтобы угнать военный корабль, вы должны проникнуть в отсек управления, расположенный в центральной надстройке. Там вы найдете красную кнопку, которая позволит перехватить управление пушками корабля и покинуть гавань."
+
+[LevelSummary]
+Title="Фрегат"
+IdealPlayerCount="4-8"

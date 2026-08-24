@@ -1,0 +1,55 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="Операция Оверлорд"
+IdealPlayerCount="8-12"
+LevelEnterText="Выведите из строя дальнобойное орудие врага, разгромив комнату управления."
+
+[ZoneInfo2]
+ZoneName="Казармы"
+
+[ZoneInfo5]
+ZoneName="Склад боеприпасов"
+
+[ZoneInfo3]
+ZoneName="Котельная"
+
+[ZoneInfo6]
+ZoneName="Пещера с орудием"
+
+[KillingField0]
+ZoneName="Пляж"
+
+[ZoneInfo1]
+ZoneName="Укрепления"
+
+[ZoneInfo0]
+ZoneName="Вход"
+
+[ZoneInfo8]
+ZoneName="Последний коридор"
+
+[WaterZone0]
+ZoneName="Вода"
+
+[AssaultInfo0]
+ObjDesc[0]="Чтобы отключить дальнобойное орудие, вы должны прорваться через базу защитников в большую пещеру. У дальней стены вы найдете центр управления орудием. Уничтожьте в нем всё оборудование."
+
+[FortStandard4]
+FortName="Котельная"
+DestroyedMessage="преодолена атакующими!"
+
+[LevelSummary]
+LevelEnterText="Выведите из строя дальнобойное орудие врага, разгромив комнату управления."
+Title="Операция Оверлорд"
+IdealPlayerCount="8-12"
+
+[FortStandard0]
+FortName="Плацдарм"
+DestroyedMessage="преодолён атакующими!"
+
+[LevelInfo2]
+Title="Операция Оверлорд"
+IdealPlayerCount="8-12"

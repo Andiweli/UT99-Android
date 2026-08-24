@@ -27,6 +27,8 @@ final class UT99Paths {
     // On launch it is copied into <files>/UT99/System/UMenu.u once per version,
     // so release APKs carry the lean Android menu without manual adb pushes.
     private static final String TAG = "UT99Paths";
+    private static final int UT_PACKAGE_TAG = 0x9E2A83C1;
+    private static final int UT_V400_PACKAGE_VERSION = 68;
     private static final String BUNDLED_SYSTEM_PATCH_DIR = "ut99_patches/System";
     private static final String BUNDLED_SYSTEM_PATCH_MARKER = ".ut99_android_bundled_system_patches_v166k_apk_install_refresh";
     private static final String BUNDLED_SYSTEM_PATCH_VERSION = "UT99_ANDROID_V166K_APK_INSTALL_UMENU_REFRESH_20260531";
@@ -98,10 +100,10 @@ final class UT99Paths {
         normalizeInstalledDataRoot(root);
         File system = new File(root, "System");
         File maps = new File(root, "Maps");
-        return new File(system, "Core.u").isFile()
-                && new File(system, "Engine.u").isFile()
-                && new File(system, "Botpack.u").isFile()
-                && new File(maps, "CityIntro.unr").isFile();
+        return isSupportedV400Package(new File(system, "Core.u"))
+                && isSupportedV400Package(new File(system, "Engine.u"))
+                && isSupportedV400Package(new File(system, "Botpack.u"))
+                && isSupportedV400Package(new File(maps, "CityIntro.unr"));
     }
 
     private static void mergeCaseVariantDirectory(File root, String canonicalName) throws IOException {
@@ -288,21 +290,52 @@ final class UT99Paths {
             }
         }
 
-        // Be permissive: different UT99 installs/mod packs may not have all ini files yet.
-        String[] coreMarkers = {
-                "Core.u",
-                "Engine.u",
-                "Botpack.u",
-                "UnrealTournament.ini",
-                "Default.ini"
-        };
-        for (String marker : coreMarkers) {
-            if (new File(system, marker).isFile()) {
-                return true;
-            }
+        // Native field offsets and replication tables in this port target the
+        // v400 package format. A directory or INI marker alone is insufficient:
+        // later Core/Engine/Botpack packages can load far enough to corrupt native
+        // state before failing. Validate the package tag and exact file version.
+        return isSupportedV400Package(new File(system, "Core.u"))
+                && isSupportedV400Package(new File(system, "Engine.u"))
+                && isSupportedV400Package(new File(system, "Botpack.u"));
+    }
+
+    private static boolean isSupportedV400Package(File file) {
+        if (file == null || !file.isFile() || file.length() < 8) {
+            return false;
         }
 
-        return false;
+        FileInputStream input = null;
+        try {
+            input = new FileInputStream(file);
+            byte[] header = new byte[8];
+            int offset = 0;
+            while (offset < header.length) {
+                int count = input.read(header, offset, header.length - offset);
+                if (count < 0) {
+                    return false;
+                }
+                offset += count;
+            }
+
+            int tag = (header[0] & 0xff)
+                    | ((header[1] & 0xff) << 8)
+                    | ((header[2] & 0xff) << 16)
+                    | ((header[3] & 0xff) << 24);
+            int version = (header[4] & 0xff)
+                    | ((header[5] & 0xff) << 8)
+                    | ((header[6] & 0xff) << 16)
+                    | ((header[7] & 0xff) << 24);
+            return tag == UT_PACKAGE_TAG && version == UT_V400_PACKAGE_VERSION;
+        } catch (IOException ignored) {
+            return false;
+        } finally {
+            if (input != null) {
+                try {
+                    input.close();
+                } catch (IOException ignored) {
+                }
+            }
+        }
     }
 
     static void ensureSkeleton(File root) {
@@ -794,9 +827,9 @@ final class UT99Paths {
         for (String name : names) {
             File ini = new File(systemDir, name);
             if (!ini.isFile() || ini.length() == 0L) continue;
-            String text = readUtf8(ini);
+            String text = readBytePreservingText(ini);
             if (text.indexOf("UT99_ANDROID_V138_VISUAL_GAMEPLAY_DEFAULTS") < 0) {
-                writeUtf8(ini, text + visualBlock);
+                writeBytePreservingText(ini, text + visualBlock);
             }
         }
     }
@@ -811,7 +844,7 @@ final class UT99Paths {
             File ini = new File(systemDir, name);
             if (!ini.isFile() || ini.length() == 0L) continue;
 
-            String text = readUtf8(ini);
+            String text = readBytePreservingText(ini);
             boolean hasViewportKey = java.util.regex.Pattern
                     .compile("(?im)^\\s*AndroidWidescreenFOV\\s*=\\s*(True|False|1|0|On|Off|Yes|No)\\s*$")
                     .matcher(text).find();
@@ -845,7 +878,7 @@ final class UT99Paths {
             }
 
             if (!updated.equals(text)) {
-                writeUtf8(ini, updated);
+                writeBytePreservingText(ini, updated);
                 Log.i(TAG, "UT99_ANDROID_V159_WIDESCREEN_FOV_DEFAULT added " + name + "=" + valueToAdd);
             }
         }
@@ -854,82 +887,80 @@ final class UT99Paths {
     private static void ensureAndroidEnglishLanguageConfig(File systemDir) throws IOException {
         if (systemDir == null) return;
 
-        // UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE:
-        // Some Russian UT99 data sets or older Android config migrations can carry
-        // Language=rut/ru/rus into the active INI. The Android package only ships
-        // the English Android menu/key-label overrides, so normalize Russian
-        // language values back to INT while leaving other explicit user choices
-        // untouched.
+        // UT99_ANDROID_V204_ENGLISH_ONLY_LANGUAGE:
+        // The Android port intentionally uses the original INT/English localization.
+        // Force every known engine INI to Language=int on every launch so stale
+        // Russian/other language settings from old installs cannot re-enable a
+        // localization the Android package does not ship.  Read/write through
+        // ISO-8859-1 so every non-ASCII byte in legacy CP1251 INIs is preserved
+        // exactly; only the ASCII Language= line is changed.
         String[] names = {"AndroidUT99.ini", "Default.ini", "UnrealTournament.ini", "DCUtil.ini", "DefaultDCUtil.ini"};
         for (String name : names) {
             File ini = new File(systemDir, name);
             if (!ini.isFile() || ini.length() == 0L) continue;
 
-            String text = readUtf8(ini);
-            String updated = ensureEnglishForRussianLanguageValue(text);
+            String text = readBytePreservingText(ini);
+            String updated = forceEnglishLanguageValue(text);
             if (!updated.equals(text)) {
-                writeUtf8(ini, updated);
-                Log.i(TAG, "UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE normalized " + name + " Language=int");
+                writeBytePreservingText(ini, updated);
+                Log.i(TAG, "UT99_ANDROID_V204_ENGLISH_ONLY_LANGUAGE forced " + name + " Language=int");
             }
         }
     }
 
-    private static String ensureEnglishForRussianLanguageValue(String text) {
+    private static String forceEnglishLanguageValue(String text) {
         if (text == null) text = "";
-        String section = "[Engine.Engine]";
-        String[] lines = text.split("\\r?\\n", -1);
-        StringBuilder out = new StringBuilder(text.length() + 64);
+        final String section = "[Engine.Engine]";
+        final String eol = text.indexOf("\r\n") >= 0 ? "\r\n" : "\n";
+        String normalized = text.replace("\r\n", "\n").replace('\r', '\n');
+        String[] lines = normalized.split("\n", -1);
+        StringBuilder out = new StringBuilder(normalized.length() + 80);
         boolean inEngineSection = false;
         boolean sawEngineSection = false;
-        boolean foundLanguageInEngineSection = false;
-        boolean changed = false;
+        boolean foundLanguage = false;
 
         for (int i = 0; i < lines.length; i++) {
             String line = lines[i];
             String trimmed = line.trim();
+
             if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
-                if (inEngineSection && !foundLanguageInEngineSection) {
-                    out.append("Language=int\n");
-                    foundLanguageInEngineSection = true;
-                    changed = true;
+                if (inEngineSection && !foundLanguage) {
+                    out.append("Language=int").append('\n');
+                    foundLanguage = true;
                 }
                 inEngineSection = "[engine.engine]".equalsIgnoreCase(trimmed);
                 if (inEngineSection) {
                     sawEngineSection = true;
+                    foundLanguage = false;
                 }
             }
 
             if (inEngineSection && isLanguageLine(trimmed)) {
-                foundLanguageInEngineSection = true;
-                String value = trimmed.substring(trimmed.indexOf('=') + 1).trim();
-                if (isRussianLanguageValue(value)) {
-                    line = "Language=int";
-                    changed = true;
-                }
+                // Keep indentation only; the value itself is intentionally fixed.
+                int firstNonWs = 0;
+                while (firstNonWs < line.length() && Character.isWhitespace(line.charAt(firstNonWs))) firstNonWs++;
+                line = line.substring(0, firstNonWs) + "Language=int";
+                foundLanguage = true;
             }
 
             out.append(line);
             if (i < lines.length - 1) out.append('\n');
         }
 
-        if (inEngineSection && !foundLanguageInEngineSection) {
-            String updated = out.toString();
-            if (updated.length() > 0 && !updated.endsWith("\n")) updated += "\n";
-            updated += "Language=int\n";
-            return updated;
+        if (inEngineSection && !foundLanguage) {
+            if (out.length() > 0 && out.charAt(out.length() - 1) != '\n') out.append('\n');
+            out.append("Language=int").append('\n');
+        } else if (!sawEngineSection) {
+            if (out.length() > 0 && out.charAt(out.length() - 1) != '\n') out.append('\n');
+            out.append('\n')
+                    .append("; UT99_ANDROID_V204_ENGLISH_ONLY_LANGUAGE").append('\n')
+                    .append(section).append('\n')
+                    .append("Language=int").append('\n');
         }
 
-        if (!sawEngineSection) {
-            if (text.length() == 0) {
-                return section + "\nLanguage=int\n";
-            }
-            String updated = out.toString();
-            if (updated.length() > 0 && !updated.endsWith("\n")) updated += "\n";
-            updated += "\n; UT99_ANDROID_V167_RUSSIAN_LOCALE_ENGLISH_LANGUAGE\n" + section + "\nLanguage=int\n";
-            return updated;
-        }
-
-        return changed ? out.toString() : text;
+        String result = out.toString();
+        if ("\r\n".equals(eol)) result = result.replace("\n", "\r\n");
+        return result;
     }
 
     private static boolean isLanguageLine(String trimmed) {
@@ -938,23 +969,34 @@ final class UT99Paths {
                 .matcher(trimmed).find();
     }
 
-    private static boolean isRussianLanguageValue(String value) {
-        if (value == null) return false;
-        String normalized = value.trim().toLowerCase(java.util.Locale.US);
-        int comment = normalized.indexOf(';');
-        if (comment >= 0) normalized = normalized.substring(0, comment).trim();
-        comment = normalized.indexOf('#');
-        if (comment >= 0) normalized = normalized.substring(0, comment).trim();
-        while (normalized.startsWith("\"") && normalized.endsWith("\"") && normalized.length() >= 2) {
-            normalized = normalized.substring(1, normalized.length() - 1).trim();
+    private static String readBytePreservingText(File file) throws IOException {
+        if (file == null || !file.isFile()) return "";
+        FileInputStream in = new FileInputStream(file);
+        try {
+            byte[] data = new byte[(int) file.length()];
+            int pos = 0;
+            while (pos < data.length) {
+                int n = in.read(data, pos, data.length - pos);
+                if (n < 0) break;
+                pos += n;
+            }
+            return new String(data, 0, pos, Charset.forName("ISO-8859-1"));
+        } finally {
+            in.close();
         }
-        normalized = normalized.replace('-', '_');
-        return "ru".equals(normalized)
-                || "rus".equals(normalized)
-                || "rut".equals(normalized)
-                || normalized.startsWith("ru_")
-                || normalized.startsWith("rus_")
-                || normalized.startsWith("rut_");
+    }
+
+    private static void writeBytePreservingText(File file, String text) throws IOException {
+        File parent = file.getParentFile();
+        if (parent != null && !parent.exists() && !parent.mkdirs()) {
+            throw new IOException("Cannot create folder: " + parent.getAbsolutePath());
+        }
+        FileOutputStream out = new FileOutputStream(file, false);
+        try {
+            out.write(text.getBytes(Charset.forName("ISO-8859-1")));
+        } finally {
+            out.close();
+        }
     }
 
     private static void ensureAndroidLeanMenuConfig(File systemDir) throws IOException {
@@ -986,9 +1028,9 @@ final class UT99Paths {
         for (String name : names) {
             File ini = new File(systemDir, name);
             if (!ini.isFile() || ini.length() == 0L) continue;
-            String text = readUtf8(ini);
+            String text = readBytePreservingText(ini);
             if (text.indexOf("UT99_ANDROID_V135_LEAN_MENU_NO_LAN_AUTOSCAN") < 0) {
-                writeUtf8(ini, text + leanBlock);
+                writeBytePreservingText(ini, text + leanBlock);
             }
         }
     }

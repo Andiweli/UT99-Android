@@ -1,0 +1,117 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+; A real user-provided UMenu.rut always takes precedence over this seed.
+[UMenuMenuBar]
+GameName=&Игра
+GameHelp=Начать новую игру, загрузить игру или выйти.
+MultiplayerName=&Сетевая игра
+MultiplayerHelp=Создать сетевую игру или присоединиться к ней.
+OptionsName=&Настройки
+OptionsHelp=Изменить настройки игры.
+StatsName=&Статистика
+StatsHelp=Просмотр статистики.
+ToolName=&Инструменты
+ToolHelp=Открыть системные инструменты.
+HelpName=&Справка
+HelpHelp=Открыть справку.
+VersionName=Версия
+ModName=&Моды
+ModHelp=Настроить установленные модификации.
+
+[UMenuGameMenu]
+NewGameName=&Новая игра
+NewGameHelp=Начать новую игру.
+LoadName=&Загрузить игру
+LoadHelp=Загрузить сохранённую игру.
+SaveName=&Сохранить игру
+SaveHelp=Сохранить текущую игру.
+BotmatchName=&Ботматч
+BotmatchHelp=Начать матч с ботами.
+QuitName=&Выход
+QuitHelp=Выйти из игры.
+QuitTitle=Выход
+QuitText=Выйти из Unreal Tournament?
+
+[UMenuMultiplayerMenu]
+StartName=&Создать игру
+StartHelp=Создать сетевую игру.
+BrowserName=&Список серверов
+BrowserHelp=Найти сетевую игру.
+LANName=&Локальная сеть
+LANHelp=Найти игру в локальной сети.
+OpenLocationName=&Открыть адрес
+OpenLocationHelp=Подключиться к серверу по адресу.
+DisconnectName=О&тключиться
+DisconnectHelp=Отключиться от текущего сервера.
+ReconnectName=&Переподключиться
+ReconnectHelp=Повторно подключиться к последнему серверу.
+
+[UMenuOptionsMenu]
+PreferencesName=&Настройки
+PreferencesHelp=Настроить игру.
+PrioritizeName=&Оружие
+PrioritizeHelp=Настроить приоритет оружия.
+PlayerMenuName=&Игрок
+PlayerMenuHelp=Настроить игрока.
+
+[UMenuOptionsClientWindow]
+GamePlayTab=Игра
+InputTab=Мышь
+ControlsTab=Управление
+AudioTab=Звук
+VideoTab=Видео
+NetworkTab=Сеть
+HUDTab=Интерфейс
+
+[UMenuBotmatchClientWindow]
+StartMatchTab=Матч
+RulesTab=Правила
+SettingsTab=Настройки
+BotConfigTab=Боты
+StartText=Начать
+
+[UMenuStatusBar]
+DefaultHelp=Нажмите ESC, чтобы вернуться в игру
+DefaultIntroHelp=Используйте меню «Игра», чтобы начать новую игру.
+
+[UMenuOptionsWindow]
+WindowTitle=Настройки
+
+[UMenuPlayerWindow]
+WindowTitle=Настройка игрока
+
+[UMenuStartGameWindow]
+WindowTitle=Сетевая игра
+
+[UMenuInputOptionsClientWindow]
+AutoAimText=Автоприцел
+AutoAimHelp=Включить помощь при прицеливании.
+JoystickText=Джойстик
+JoystickHelp=Включить джойстик.
+SensitivityText=Чувствительность мыши
+SensitivityHelp=Изменить чувствительность мыши.
+InvertMouseText=Инвертировать мышь
+InvertMouseHelp=Инвертировать вертикальное движение мыши.
+MouselookText=Обзор мышью
+MouselookHelp=Использовать мышь для обзора.
+MouseSmoothText=Сглаживание мыши
+MouseSmoothHelp=Сглаживать движение мыши.
+
+[UMenuVideoClientWindow]
+DriverText=Видеодрайвер
+DriverButtonText=Сменить
+ResolutionText=Разрешение
+ColorDepthText=Глубина цвета
+BitsText=бит
+TextureDetailText=Детализация мира
+SkinDetailText=Детализация игроков
+BrightnessText=Яркость
+MouseText=Скорость мыши
+ShowDecalsText=Следы и декали
+DynamicLightsText=Динамическое освещение
+
+[UMenuAudioClientWindow]
+SoundQualityText=Качество звука
+MusicVolumeText=Громкость музыки
+SoundVolumeText=Громкость звука
+VoiceMessagesText=Голосовые сообщения
+MessageBeepText=Звук сообщений

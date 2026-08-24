@@ -1,0 +1,36 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+[General]
+Version=Версия %i
+
+[Menu]
+LeftString=Слева
+RightString=Справа
+CenterString=По центру
+EnabledString=Включено
+DisabledString=Выключено
+YesString=да
+NoString=нет
+
+[Console]
+LoadingMessage=ЗАГРУЗКА
+SavingMessage=СОХРАНЕНИЕ
+ConnectingMessage=ПОДКЛЮЧЕНИЕ
+PausedMessage=ПАУЗА
+PrecachingMessage=ПОДГОТОВКА
+
+[GameInfo]
+DefaultPlayerName=Игрок
+GameName=Игра
+WrongPassword=Неверный пароль.
+NeedPassword=Для входа на сервер требуется пароль.
+MaxedOutMessage=Сервер заполнен.
+
+[PlayerPawn]
+QuickSaveString=Быстрое сохранение
+NoPauseMessage=Игру нельзя поставить на паузу
+OwnCamera=собственная камера
+FailedView=Не удалось сменить вид.
+
+[Counter]
+CountMessage=Осталось: %i...
+CompleteMessage=Готово!

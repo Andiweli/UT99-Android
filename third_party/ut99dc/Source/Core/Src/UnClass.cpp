@@ -406,8 +406,9 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 		PropertiesSize = Align(PropertiesSize,4);
 
 		// A mismatch means C++ and UnrealScript would address members at
-		// different offsets. Keep the allocation large enough and emit a
-		// precise diagnostic for ARM64 bring-up.
+		// different offsets. Continuing with the larger size only hides the
+		// incompatible layout; property access and native replication can still
+		// read the wrong member. Reject that data/code combination deterministically.
 		if( IntrinsicSize>0 && PropertiesSize!=IntrinsicSize )
 		{
 			debugf( NAME_Warning, TEXT("Native class size mismatch: %s script=%i C++=%i"), GetName(), PropertiesSize, IntrinsicSize );
@@ -417,7 +418,14 @@ void UStruct::Link( FArchive& Ar, UBOOL Props )
 				if( Property )
 					debugf( NAME_Warning, TEXT("  %s %s: offset=%i size=%i"), Property->GetClass()->GetName(), Property->GetName(), Property->Offset, Property->GetSize() );
 			}
-			PropertiesSize = Max( PropertiesSize, IntrinsicSize );
+			appErrorf
+			(
+				TEXT("Native class layout mismatch for %s (package=%i, C++=%i). ")
+				TEXT("Install the v400 game packages that match this engine build."),
+				GetName(),
+				PropertiesSize,
+				IntrinsicSize
+			);
 		}
 	}
 	else

@@ -1,0 +1,15 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+[UWindowMessageBoxCW]
+YesText=Да
+NoText=Нет
+OKText=OK
+CancelText=Отмена
+
+[UWindowSmallCancelButton]
+CancelText=Отмена
+
+[UWindowSmallCloseButton]
+CloseText=Закрыть
+
+[UWindowSmallOKButton]
+OKText=OK

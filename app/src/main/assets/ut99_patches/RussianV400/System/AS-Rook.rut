@@ -1,0 +1,39 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="Ладья"
+IdealPlayerCount="6-10"
+LevelEnterText="Наденьте доспехи, приготовьтесь к битве"
+
+[LevelSummary]
+LevelEnterText="Наденьте доспехи, приготовьтесь к битве"
+Title="Ладья"
+IdealPlayerCount="6-10"
+
+[SpecialEvent0]
+Message="Сторожка открыта!"
+
+[FortStandard6]
+FortName="Библиотека"
+DestroyedMessage="открыта!"
+
+[FortStandard2]
+FortName="Главные ворота"
+DestroyedMessage="открыты!"
+
+[FortStandard3]
+DestroyedMessage=" "
+
+[FortStandard0]
+DestroyedMessage=" "
+
+[FortStandard1]
+DestroyedMessage=" "
+
+[AssaultInfo0]
+ObjDesc[0]="Выйдите из замка, сверните направо и найдите рычаг, который откроет доступ к библиотеке."
+ObjDesc[1]="Пройдите через библиотеку. Там вы найдете лебедку, которая удерживается двумя цепями. Разрушьте цепи — это позволит получить доступ к сторожке во внутреннем дворе."
+ObjDesc[2]="Вернитесь во двор и используйте рычаг в сторожке, чтобы открыть главные ворота замка."
+ObjDesc[3]="Выберитесь живым из замка через главные ворота!"

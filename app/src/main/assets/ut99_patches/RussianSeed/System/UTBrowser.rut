@@ -1,0 +1,6 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+[UTBrowserServerGrid]
+ngStatsName=ngWorldStats
+EnabledText=Включено
+AskNgStatsTitle=Использовать ngWorldStats?
+AskNgStatsText=На этом сервере включён сбор статистики. Хотите настроить пароль ngWorldStats?

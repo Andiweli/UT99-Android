@@ -1,0 +1,36 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+[DeathMatchPlus]
+GameName=Бой насмерть
+WaitingMessage1=Ожидание готовности игроков.
+ReadyMessage=ГОТОВ!
+NotReadyMessage=НЕ ГОТОВ!
+CountDownMessage= секунд до начала!
+StartMessage=Матч начался!
+GameEndedMessage=побеждает в матче!
+
+[TeamGamePlus]
+GameName=Командная игра
+
+[CTFGame]
+GameName=Захват флага
+
+[Assault]
+GameName=Штурм
+
+[Domination]
+GameName=Доминирование
+
+[TournamentScoreboard]
+MapTitle=на карте
+Author=автор
+Restart=Вы погибли. Нажмите [Fire], чтобы возродиться!
+Continue= Нажмите [Fire], чтобы продолжить!
+Ended=Матч окончен.
+ElapsedTime=Прошло времени: 
+RemainingTime=Осталось времени: 
+FragGoal=Лимит фрагов:
+TimeLimit=Лимит времени:
+PlayerString=Игрок
+FragsString=Фраги
+DeathsString=Смерти
+PingString=Пинг

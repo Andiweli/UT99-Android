@@ -1,0 +1,9 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[General]
+Start=Unreal Tournament (запускается)
+Exit=Unreal Tournament (завершается)
+Run=Unreal Tournament (запущен)
+Product=Unreal Tournament

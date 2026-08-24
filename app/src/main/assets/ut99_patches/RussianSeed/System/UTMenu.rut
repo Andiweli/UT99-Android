@@ -1,0 +1,30 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+[UTConsole]
+ClassCaption=Консоль Unreal Tournament
+
+[ManagerWindow]
+DMText=Бой насмерть
+DOMText=Доминирование
+CTFText=Захват флага
+ASText=Штурм
+ChallengeText=Испытание
+TrophyText=Трофеи
+
+[NewCharacterWindow]
+NameText=Имя
+SexText=Пол
+MaleText=Мужчина
+FemaleText=Женщина
+TeamText=Команда
+FaceText=Лицо
+SkillsText=Уровень навыка
+
+[SpeechWindow]
+WindowTitle=Команды
+
+[UTAudioClientWindow]
+AnnouncerVolumeText=Громкость диктора
+AutoTauntText=Автонасмешки
+Use3DHardwareText=Аппаратный 3D-звук
+UseSurroundSoundText=Объёмный звук
+NoMatureLanguageText=Без грубых выражений

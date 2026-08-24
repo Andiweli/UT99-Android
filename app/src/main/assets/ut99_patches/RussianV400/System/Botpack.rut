@@ -1,0 +1,706 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[Public]
+Object=(Name=BotPack.DeathMatchPlus,Class=Class,MetaClass=Botpack.TournamentGameInfo)
+Object=(Name=BotPack.TeamGamePlus,Class=Class,MetaClass=Botpack.TournamentGameInfo)
+Object=(Name=BotPack.Assault,Class=Class,MetaClass=Botpack.TournamentGameInfo)
+Object=(Name=BotPack.Domination,Class=Class,MetaClass=Botpack.TournamentGameInfo)
+Object=(Name=BotPack.CTFGame,Class=Class,MetaClass=Botpack.TournamentGameInfo)
+Object=(Name=BotPack.LastManStanding,Class=Class,MetaClass=Botpack.TournamentGameInfo)
+Object=(Name=BotPack.TMale1Bot,Class=Class,MetaClass=BotPack.Bot,Description="Мужчина-коммандос")
+Object=(Name=BotPack.TMale1,Class=Class,MetaClass=Botpack.TournamentPlayer,Description="Мужчина-коммандос")
+Object=(Name=BotPack.TMale2Bot,Class=Class,MetaClass=BotPack.Bot,Description="Мужчина-солдат")
+Object=(Name=BotPack.TMale2,Class=Class,MetaClass=Botpack.TournamentPlayer,Description="Мужчина-солдат")
+Object=(Name=BotPack.TFemale1Bot,Class=Class,MetaClass=BotPack.Bot,Description="Женщина-коммандос")
+Object=(Name=BotPack.TFemale1,Class=Class,MetaClass=Botpack.TournamentPlayer,Description="Женщина-коммандос")
+Object=(Name=BotPack.TFemale2Bot,Class=Class,MetaClass=BotPack.Bot,Description="Женщина-солдат")
+Object=(Name=BotPack.TFemale2,Class=Class,MetaClass=Botpack.TournamentPlayer,Description="Женщина-солдат")
+Object=(Name=BotPack.TBoss,Class=Class,MetaClass=Botpack.TournamentPlayer,Description="Босс")
+Object=(Name=BotPack.TBossBot,Class=Class,MetaClass=BotPack.Bot,Description="Босс")
+Object=(Name=BotPack.VoiceMaleOne,Class=Class,MetaClass=BotPack.VoiceMale,Description="Мужской-1")
+Object=(Name=BotPack.VoiceFemaleOne,Class=Class,MetaClass=BotPack.VoiceFemale,Description="Женский-1")
+Object=(Name=BotPack.VoiceMaleTwo,Class=Class,MetaClass=BotPack.VoiceMale,Description="Мужской-2")
+Object=(Name=BotPack.VoiceFemaleTwo,Class=Class,MetaClass=BotPack.VoiceFemale,Description="Женский-2")
+Object=(Name=BotPack.VoiceBoss,Class=Class,MetaClass=BotPack.VoiceBoss,Description="Робот")
+Object=(Name=BotPack.Enforcer,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Принудитель")
+Object=(Name=BotPack.DoubleEnforcer,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Двойные Принудители")
+Object=(Name=BotPack.Translocator,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Транслокатор")
+Object=(Name=BotPack.ImpactHammer,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Ударный молот")
+Object=(Name=BotPack.Minigun2,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Миниган")
+Object=(Name=BotPack.PulseGun,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Пульсовая пушка")
+Object=(Name=BotPack.Ripper,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Потрошитель")
+Object=(Name=BotPack.ShockRifle,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Шок-ружьё")
+Object=(Name=BotPack.SniperRifle,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Снайперская винтовка")
+Object=(Name=BotPack.UT_BioRifle,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="GES-биоружьё")
+Object=(Name=BotPack.UT_Eightball,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Ракетница")
+Object=(Name=BotPack.UT_FlakCannon,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Зенитная пушка")
+Object=(Name=BotPack.WarHeadLauncher,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Искупитель")
+Object=(Name=BotPack.Chainsaw,Class=Class,MetaClass=Botpack.TournamentWeapon,Description="Бензопила")
+Object=(Name=BotPack.InstaGibDM,Class=Class,MetaClass=Engine.Mutator,Description="Инстагиб,Только усиленные Шок-ружья.")
+Object=(Name=BotPack.PulseArena,Class=Class,MetaClass=Engine.Mutator,Description="Пульсовая арена,Только Пульсовые пушки.")
+Object=(Name=BotPack.FlakArena,Class=Class,MetaClass=Engine.Mutator,Description="Зенитная арена,Только Зенитные пушки.")
+Object=(Name=BotPack.RocketArena,Class=Class,MetaClass=Engine.Mutator,Description="Ракетная арена,Только Ракетницы.")
+Object=(Name=BotPack.ShockArena,Class=Class,MetaClass=Engine.Mutator,Description="Шоковая арена,Только Шок-ружья.")
+Object=(Name=BotPack.SniperArena,Class=Class,MetaClass=Engine.Mutator,Description="Снайперская арена,Только Снайперские винтовки.")
+Object=(Name=BotPack.ChainsawMelee,Class=Class,MetaClass=Engine.Mutator,Description="Бензопилы,Оружие ближнего боя заменено бензопилами.")
+Object=(Name=BotPack.NoRedeemer,Class=Class,MetaClass=Engine.Mutator,Description="Без Искупителя,Искупитель убран из игры.")
+Object=(Name=BotPack.NoPowerups,Class=Class,MetaClass=Engine.Mutator,Description="Без бонусов,Бонусы убраны из игры.")
+Object=(Name=BotPack.LowGrav,Class=Class,MetaClass=Engine.Mutator,Description="Низкая гравитация,Пониженная гравитация.")
+Object=(Name=BotPack.Stealth,Class=Class,MetaClass=Engine.Mutator,Description="Невидимость,Все игроки невидимы.")
+Object=(Name=BotPack.FatBoy,Class=Class,MetaClass=Engine.Mutator,Description="Толстяк,Игроки толстеют от убийств.")
+Object=(Name=BotPack.InstantRockets,Class=Class,MetaClass=Engine.Mutator,Description="Моментальные ракеты,Нельзя заряжать несколько ракет.")
+Object=(Name=BotPack.JumpMatch,Class=Class,MetaClass=Engine.Mutator,Description="Прыг-матч,Игроки могут прыгать очень высоко.")
+Object=(Name=BotPack.TDMDefaultMapList,Class=Class,MetaClass=Botpack.TDMmaplist,Description="Карты по умолчанию")
+Object=(Name=BotPack.TDMLargeMapList,Class=Class,MetaClass=Botpack.TDMmaplist,Description="Большие карты")
+Object=(Name=BotPack.TDMMediumMapList,Class=Class,MetaClass=Botpack.TDMmaplist,Description="Средние карты")
+Object=(Name=BotPack.TDMSmallMapList,Class=Class,MetaClass=Botpack.TDMmaplist,Description="Малые карты")
+Object=(Name=BotPack.ASDefaultMapList,Class=Class,MetaClass=Botpack.ASMapList,Description="Карты по умолчанию")
+Object=(Name=BotPack.DOMDefaultMapList,Class=Class,MetaClass=Botpack.DOMMapList,Description="Карты по умолчанию")
+Object=(Name=BotPack.CTFDefaultMapList,Class=Class,MetaClass=Botpack.CTFMapList,Description="Карты по умолчанию")
+Object=(Name=BotPack.TDKDefaultMapList,Class=Class,MetaClass=Botpack.TDKMapList,Description="Карты по умолчанию")
+
+[ChallengeHUD]
+VersionMessage="Версия"
+PlayerCountString="Рекомендуется игроков:"
+MapTitleString="на карте"
+AuthorString="автор"
+MapTitleString2="Карта:"
+AuthorString2="Автор:"
+RankString="Ранг:"
+SpreadString="Отрыв:"
+IdentifyName="Имя:"
+IdentifyHealth="Здоровье:"
+IdentifyCallsign="Позывной:"
+LiveFeed="Прямая трансляция: "
+
+[DeathMatchPlus]
+TourneyMessage="Ожидание других игроков."
+WaitingMessage1="Ожидание сигналов готовности."
+WaitingMessage2="(Нажмите Огонь, чтобы подтвердить готовность!)"
+ReadyMessage="Вы ГОТОВЫ!"
+NotReadyMessage="Вы НЕ ГОТОВЫ!"
+CountDownMessage=" секунд до начала игры!"
+StartMessage="Матч начался!"
+GameEndedMessage="выигрывает матч!"
+SingleWaitingMessage="Нажмите Огонь, чтобы начать игру."
+gamegoal="фрагов для победы."
+NoNameChange=" занято."
+OvertimeMessage="Ничья. Дополнительное время до внезапной смерти!"
+GameName="Турнир: Бой насмерть"
+YouAre="Вы -"
+
+[TournamentGameInfo]
+DeathMessage[0]="убит"
+DeathMessage[1]="повержен"
+DeathMessage[2]="уничтожен"
+DeathMessage[3]="зарезан"
+DeathMessage[4]="аннигилирован"
+DeathMessage[5]="сражён"
+DeathMessage[6]="разнесён"
+DeathMessage[7]="продырявлен"
+DeathMessage[8]="разорван"
+DeathMessage[9]="уничтожен"
+DeathMessage[10]="прикончен"
+DeathMessage[11]="раздавлен"
+DeathMessage[12]="сломлен"
+DeathMessage[13]="размазан"
+DeathMessage[14]="истёрт"
+DeathMessage[15]="разбит"
+DeathMessage[16]="избит"
+DeathMessage[17]="сбит"
+DeathMessage[18]="раздавлен"
+DeathMessage[19]="рассечён"
+DeathMessage[20]="нарезан"
+DeathMessage[21]="распорот"
+DeathMessage[22]="взорван"
+DeathMessage[23]="разорван"
+DeathMessage[24]="прихлопнут"
+DeathMessage[25]="выпотрошен"
+DeathMessage[26]="обезврежен"
+DeathMessage[27]="отхлёстан"
+DeathMessage[28]="пронзён"
+DeathMessage[29]="разгромлен"
+DeathMessage[30]="разбит"
+DeathMessage[31]="повержен"
+DeathModifier[0]="тщательно "
+DeathModifier[1]="полностью "
+DeathModifier[2]="абсолютно "
+DeathModifier[3]="совершенно "
+DeathModifier[4]="безоговорочно "
+MajorDeathMessage[0]=" получает ещё одну дыру"
+MajorDeathMessage[1]=" серьёзно изувечен"
+MajorDeathMessage[2]=" узнаёт новое определение боли"
+HeadLossMessage[0]="обезглавлен"
+HeadLossMessage[1]="лишён головы"
+DeathVerb=" "
+DeathPrep=" от "
+DeathTerm="убит"
+ExplodeMessage=" взорван."
+SuicideMessage=" внезапно умер."
+FallMessage=" оставил небольшой кратер."
+DrownedMessage=" забыл всплыть за воздухом."
+BurnedMessage=" сгорел"
+CorrodedMessage=" растворился"
+HackedMessage=" был разрублен."
+MortarMessage=" был взорван миномётом."
+MaleSuicideMessage=" погиб по собственной глупости."
+FemaleSuicideMessage=" погибла по собственной глупости."
+
+[CTFGame]
+StartUpMessage=""
+gamegoal="флагов для победы!"
+GameName="Захват флага"
+
+[TeamGamePlus]
+StartUpTeamMessage="Вы в команде"
+TeamChangeMessage="Используйте Опции -> Установки игрока, чтобы сменить команду."
+TeamColor[0]="Красные"
+TeamColor[1]="Синие"
+TeamColor[2]="Зелёные"
+TeamColor[3]="Золотые"
+StartUpMessage="Действуйте с товарищами против других команд."
+GameName="Командная игра"
+
+[Assault]
+AttackMessage="Захватите базу врага!"
+DefendMessage="Защитите свою базу!"
+TieMessage="Ничья!"
+WinMessage=" и побеждают!"
+ObjectivesMessage="Нажмите F3 для брифинга миссии."
+DefenderSuccess="защитили базу"
+StartUpMessage=""
+GameEndedMessage="захватили базу за"
+GameName="Штурм"
+
+[ControlPoint]
+PointName="Позиция"
+
+[TournamentPlayer]
+spreenote[0]="совершает серию убийств!"
+spreenote[1]="в ярости!"
+spreenote[2]="доминирует!"
+spreenote[3]="разносит соперников!"
+spreenote[4]="неудержим!"
+spreenote[5]="владеет ареной!"
+spreenote[6]="нуждается в достойном сопернике!"
+spreenote[7]="БОГ!"
+
+[Domination]
+StartUpMessage="Захватывайте и удерживайте точки, чтобы победить."
+gamegoal="очков для победы!"
+GameName="Доминирование"
+
+[FortStandard]
+FortName="Цель штурма"
+DestroyedMessage="уничтожена!"
+
+[TournamentGameReplicationInfo]
+HumanString="*Человек*"
+CommanderString="*Командир*"
+SupportString="поддерживает"
+DefendString="защищает"
+AttackString="атакует"
+HoldString="держит"
+FreelanceString="действует самостоятельно"
+
+[TeamScoreBoard]
+TeamName[0]="Красная команда:"
+TeamName[1]="Синяя команда:"
+TeamName[2]="Зелёная команда:"
+TeamName[3]="Золотая команда:"
+TeamExt="Команда:"
+OrdersString="Приказы:"
+InString="Позиция:"
+
+[TournamentScoreBoard]
+MapTitle="на карте"
+Author="автор"
+Restart="Вы убиты. Нажмите [Огонь] для возрождения!"
+Ended="Матч окончен."
+Continue=" Нажмите [Огонь], чтобы продолжить!"
+ElapsedTime="Прошло времени: "
+RemainingTime="Осталось времени: "
+FragGoal="Лимит фрагов:"
+TimeLimit="Лимит времени:"
+PlayerString="Игрок"
+FragsString="Фраги"
+DeathsString="Смерти"
+PingString="Пинг"
+TimeString="Время"
+
+[ChallengeBotInfo]
+Skills[0]="Новичок"
+Skills[1]="Средний"
+Skills[2]="Опытный"
+Skills[3]="Умелый"
+Skills[4]="Адепт"
+Skills[5]="Мастер"
+Skills[6]="Нечеловек"
+Skills[7]="Божественный"
+
+[ChallengeTeamHUD]
+OrderNames[0]="Защищать"
+OrderNames[1]="Удерживать"
+OrderNames[2]="Атаковать"
+OrderNames[3]="Следовать"
+OrderNames[4]="Действовать самостоятельно"
+OrderNames[5]="Цель"
+OrderNames[10]="Атаковать"
+OrderNames[11]="Действовать самостоятельно"
+
+[ChallengeVoicePack]
+LeaderSign[0]="Красный лидер"
+LeaderSign[1]="Синий лидер"
+LeaderSign[2]="Зелёный лидер"
+LeaderSign[3]="Золотой лидер"
+
+[LastManStanding]
+StartUpMessage="Последний герой. Сколько вы сможете продержаться?"
+GameName="Последний герой"
+
+[CTFMessage]
+ReturnBlue="вернул синий флаг."
+ReturnRed="вернул красный флаг."
+ReturnedBlue="Синий флаг возвращён."
+ReturnedRed="Красный флаг возвращён."
+CaptureBlue="захватил синий флаг. Красная команда получает очко!"
+CaptureRed="захватил красный флаг. Синяя команда получает очко!"
+DroppedBlue="уронил синий флаг."
+DroppedRed="уронил красный флаг."
+HasRed="несёт красный флаг."
+HasBlue="несёт синий флаг."
+
+[VacuumZone]
+DamageString="%o погиб от разгерметизации"
+
+[CTFMessage2]
+YouHaveFlagString="У вас флаг! Возвращайтесь на базу!"
+EnemyHasFlagString="Враг захватил ваш флаг! Верните его!"
+
+[UT_Eightball]
+WeaponDescription="Классификация: тяжёлое баллистическое оружие\n\nОсновной огонь: выпускает мощные ракеты; удерживание кнопки заряжает несколько ракет.\n\nАльтернативный огонь: гранаты.\n\nПри удержании прицела на противнике возможен захват цели."
+DeathMessage="%o уничтожен ракетой %k из %w."
+PickupMessage="Вы взяли Ракетницу."
+ItemName="Ракетница"
+
+[TBoss]
+MenuName="Босс"
+
+[TBossBot]
+MenuName="Босс"
+
+[DeathMessagePlus]
+KilledString="убит игроком"
+
+[TournamentHealth]
+PickupMessage="Вы взяли Аптечку +"
+
+[ut_shieldbelt]
+PickupMessage="Вы взяли Защитный пояс."
+ItemName="Защитный пояс"
+
+[ScrollingMessageTexture]
+HisMessage="его"
+HerMessage="её"
+
+[TeamCannon]
+MenuName="автоматическая пушка"
+NameArticle=""
+
+[lmsscoreboard]
+VictoryGoal="Останьтесь последним выжившим!"
+FragsString="Жизни"
+
+[ShockRifle]
+WeaponDescription="Классификация: энергетическое оружие\n\nОсновной огонь: мгновенный энергетический луч.\n\nАльтернативный огонь: медленная плазменная сфера.\n\nВыстрелите лучом в сферу для мощного комбо-взрыва."
+DeathMessage="%k уничтожил %o с помощью %w."
+PickupMessage="Вы взяли Шок-ружьё."
+ItemName="Шок-ружьё"
+
+[PulseGun]
+WeaponDescription="Классификация: плазменное оружие\n\nОсновной огонь: быстрые плазменные импульсы.\n\nАльтернативный огонь: непрерывный энергетический луч."
+MessageNoAmmo=" без плазмы."
+DeathMessage="%o сожжён плазмой %k."
+PickupMessage="Вы взяли Пульсовую пушку."
+ItemName="Пульсовая пушка"
+
+[WarheadLauncher]
+WeaponDescription="Классификация: термоядерное оружие\n\nОсновной огонь: запускает мощную ядерную ракету.\n\nАльтернативный огонь: ручное управление ракетой."
+DeathMessage="%o испарён %k с помощью %w!"
+PickupMessage="Вы взяли Искупитель."
+ItemName="Искупитель"
+
+[SniperRifle]
+WeaponDescription="Классификация: дальнобойное оружие\n\nОсновной огонь: мощный точный выстрел.\n\nАльтернативный огонь: оптическое приближение."
+DeathMessage="%k поразил %o выстрелом из %w."
+PickupMessage="Вы взяли Снайперскую винтовку."
+ItemName="Снайперская винтовка"
+
+[ImpactHammer]
+WeaponDescription="Классификация: оружие ближнего боя\n\nОсновной огонь: накапливает мощный удар.\n\nАльтернативный огонь: мгновенный удар на близкой дистанции."
+DeathMessage="%o разбит ударом %k из %w."
+PickupMessage="Вы взяли Ударный молот."
+ItemName="Ударный молот"
+
+[CHEOLHUD]
+ESCMessage="Нажмите ESC для продолжения..."
+
+[PressureZone]
+DamageString="%o погиб из-за разгерметизации от %k."
+
+[CHNullHUD]
+ESCMessage="Нажмите ESC для начала..."
+
+[UT_FlakCannon]
+WeaponDescription="Классификация: тяжёлое осколочное оружие\n\nОсновной огонь: поток раскалённых осколков.\n\nАльтернативный огонь: разрывной зенитный снаряд."
+DeathMessage="%o разорван осколками %k из %w."
+PickupMessage="Вы взяли Зенитную пушку."
+ItemName="Зенитная пушка"
+
+[UDamage]
+PickupMessage="Вы взяли Усилитель урона!"
+ItemName="Усилитель урона"
+
+[AssaultHUD]
+IdentifyAssault=" !! ЦЕЛЬ ШТУРМА !! "
+
+[UnrealCTFScoreboard]
+FragGoal="Лимит захватов:"
+
+[ut_biorifle]
+WeaponDescription="Классификация: токсичное оружие\n\nОсновной огонь: небольшие сгустки биомассы.\n\nАльтернативный огонь: заряженный большой сгусток, распадающийся на части."
+DeathMessage="%o растворён биомассой %k."
+PickupMessage="Вы взяли GES-биоружьё."
+ItemName="GES-биоружьё"
+
+[MultiKillMessage]
+DoubleKillString="ДВОЙНОЕ УБИЙСТВО!"
+TripleKillString="ТРОЙНОЕ УБИЙСТВО!"
+MultiKillString="МУЛЬТИУБИЙСТВО!"
+UltraKillString="УЛЬТРАУБИЙСТВО!"
+MonsterKillString="МОНСТР-УБИЙСТВО!"
+
+[DecapitationMessage]
+DecapitationString="В ГОЛОВУ!"
+
+[KillerMessagePlus]
+YouKilled="Вы убили"
+ScoreString="Ваш счёт:"
+
+[VictimMessage]
+YouWereKilledBy="Вас убил"
+KilledByTrailer="!"
+
+[minigun2]
+WeaponDescription="Классификация: скорострельное оружие\n\nОсновной огонь: точная очередь.\n\nАльтернативный огонь: повышенная скорострельность с меньшей точностью."
+DeathMessage="%o изрешечён %k из %w."
+PickupMessage="Вы взяли Миниган."
+ItemName="Миниган"
+
+[DeathMatchMessage]
+OvertimeMessage="Ничья. Дополнительное время до внезапной смерти!"
+GlobalNameChange="меняет имя на"
+NewTeamMessage="переходит в"
+
+[TMale2]
+MenuName="Мужчина-солдат"
+
+[TMale2Bot]
+MenuName="Мужчина-солдат"
+
+[ut_jumpboots]
+ExpireMessage="Антигравитационные ботинки разрядились."
+PickupMessage="Вы взяли Антигравитационные ботинки."
+ItemName="Антигравитационные ботинки"
+
+[ChainSaw]
+WeaponDescription="Классификация: оружие ближнего боя\n\nОсновной огонь: непрерывная атака цепью.\n\nАльтернативный огонь: мощный горизонтальный удар."
+DeathMessage="%k распилил %o с помощью %w."
+PickupMessage="Вы взяли Бензопилу."
+ItemName="Бензопила"
+
+[TMale1]
+MenuName="Мужчина-коммандос"
+
+[TMale1Bot]
+MenuName="Мужчина-коммандос"
+
+[TDarkMatch]
+GameName="Турнирный тёмный матч"
+
+[KillingSpreeMessage]
+EndSpreeNote="прерывает серию убийств игрока"
+EndSelfSpree="прервал собственную серию самоубийством"
+EndFemaleSpree="прервала собственную серию самоубийством"
+spreenote[0]="совершает серию убийств!"
+spreenote[1]="в ярости!"
+spreenote[2]="доминирует!"
+spreenote[3]="неудержим!"
+spreenote[4]="БОГ!"
+
+[ripper]
+WeaponDescription="Классификация: дисковое оружие\n\nОсновной огонь: рикошетящие острые диски.\n\nАльтернативный огонь: взрывные диски."
+DeathMessage="%k разрезал %o с помощью %w."
+PickupMessage="Вы взяли Потрошитель."
+ItemName="Потрошитель"
+
+[UT_invisibility]
+ExpireMessage="Невидимость закончилась."
+PickupMessage="Вы стали невидимы."
+ItemName="Невидимость"
+
+[Miniammo]
+PickupMessage="Вы взяли 50 патронов."
+ItemName="Патроны для минигана"
+
+[ControlPointMessage]
+ControlPointStr="Контрольная точка"
+ControlledBy="теперь контролируется командой"
+TeamStr=""
+ClaimedStr="захвачена"
+
+[TFemale1]
+MenuName="Женщина-коммандос"
+
+[TFemale1Bot]
+MenuName="Женщина-коммандос"
+
+[BulletBox]
+PickupMessage="Вы взяли коробку винтовочных патронов."
+ItemName="Коробка патронов"
+
+[TFemale2]
+MenuName="Женщина-солдат"
+
+[TFemale2Bot]
+MenuName="Женщина-солдат"
+
+[AssaultScoreboard]
+AssaultCondition="Штурмуйте базу!"
+FragGoal="Лимит очков:"
+
+[FirstBloodMessage]
+FirstBloodString="проливает первую кровь!"
+
+[Commander]
+MenuName="Командир"
+
+[ShockCore]
+PickupMessage="Вы взяли Шоковое ядро."
+ItemName="Шоковое ядро"
+
+[doubleenforcer]
+ItemName="Двойные Enforcer"
+
+[LMSOutMessage]
+OutMessage="ВЫБЫВАЕТ!"
+
+[TimeMessage]
+TimeMessage[0]="Осталось 5 минут"
+TimeMessage[2]="Осталось 3 минуты"
+TimeMessage[3]="Осталось 2 минуты"
+TimeMessage[4]="Осталась 1 минута"
+TimeMessage[5]="Осталось 30 секунд"
+TimeMessage[6]="Осталось 10 секунд"
+TimeMessage[7]="9..."
+TimeMessage[8]="8..."
+TimeMessage[9]="7..."
+TimeMessage[10]="6..."
+TimeMessage[11]="5 секунд..."
+TimeMessage[12]="4..."
+TimeMessage[13]="3..."
+TimeMessage[14]="2..."
+TimeMessage[15]="1..."
+
+[armor2]
+PickupMessage="Вы взяли Броню."
+ItemName="Броня"
+
+[SuperShockRifle]
+DeathMessage="%k испепелил %o с помощью %w."
+PickupMessage="Вы взяли Улучшенное Шок-ружьё."
+ItemName="Улучшенное Шок-ружьё"
+
+[bioammo]
+PickupMessage="Вы взяли Биопатроны."
+ItemName="Биопатроны"
+
+[RocketPack]
+PickupMessage="Вы взяли упаковку ракет."
+
+[BladeHopper]
+PickupMessage="Вы взяли Лезвия."
+ItemName="Лезвия"
+
+[ThighPads]
+PickupMessage="Вы взяли Броню для ног."
+ItemName="Броня для ног"
+
+[DominationScoreboard]
+FragGoal="Лимит очков:"
+
+[flakammo]
+PickupMessage="Вы взяли 10 Зенитных снарядов."
+ItemName="Зенитные снаряды"
+
+[SuperShockCore]
+PickupMessage="Вы взяли улучшенное Шоковое ядро."
+ItemName="Улучшенное Шоковое ядро"
+
+[PAmmo]
+PickupMessage="Вы взяли Пульсовую батарею."
+ItemName="Пульсовая батарея"
+
+[RifleShell]
+PickupMessage="Вы взяли винтовочный патрон."
+ItemName="Винтовочный патрон"
+
+[HealthVial]
+PickupMessage="Вы взяли Флакон здоровья +"
+ItemName="Флакон здоровья"
+
+[HealthPack]
+PickupMessage="Вы взяли Большую аптечку +"
+ItemName="Большая аптечка"
+
+[EClip]
+PickupMessage="Вы взяли обойму."
+
+[ChallengeDMP]
+GameName="Молниеносный DeathMatch"
+
+[LadderDOM]
+MapTitle[0]="Обучение DOM"
+MapTitle[1]="Трущобы"
+MapTitle[2]="Лаборатория Гарден"
+MapTitle[3]="Склеп"
+MapTitle[4]="Литейный завод"
+MapTitle[5]="Шестерёнка"
+MapTitle[6]="Свинцовый завод"
+MapTitle[7]="Древний аквифер"
+MapTitle[8]="Гробница Сесмара"
+MapTitle[9]="Металлическая мечта"
+MapDescription[0]="Изучите основные правила Доминирования в этой тренировочной среде. Проверьте навыки на неподготовленной команде перед вступлением в Турнир."
+MapDescription[1]="Многочисленные столкновения банд превратили эти городские трущобы в кровавое поле боя. Теперь Лиандри использует их как арену Доминирования."
+MapDescription[2]="Лаборатория Гарден была построена для испытаний взрывчатки и содержит две взрывные камеры. Один из инвесторов оказался агентом Лиандри, и комплекс перешёл корпорации."
+MapDescription[3]="Эти искусственно состаренные руины были построены легендарным мастером Турнира Килбрагом как личная тренировочная площадка. После его смерти объект перешёл Лиандри."
+MapDescription[4]="После многочисленных несчастных случаев литейный завод закрыли и выставили на аукцион, где его быстро приобрёл агент Лиандри."
+MapDescription[5]="После новых мирных соглашений многие военные объекты были заброшены. Этот комплекс когда-то служил подземным складом оружия и снаряжения."
+MapDescription[6]="Старый свинцовый завод по другую сторону путей отлично подходит для войны. В некоторых местах до сих пор находится расплавленный свинец."
+MapDescription[7]="Этот древний храм был священным для построившей его расы. Лиандри обнаружила его в горах и превратила в арену."
+MapDescription[8]="Несмотря на протесты, эта историческая достопримечательность теперь принадлежит Лиандри и используется для проведения Турнира."
+MapDescription[9]="Эта нефтяная платформа превращена в арену Доминирования неподалёку от необычного метеорологического явления на Криллии."
+
+[LadderDM]
+MapTitle[0]="Обучение DM"
+MapTitle[1]="Забвение"
+MapTitle[2]="Стойкость"
+MapTitle[3]="Фрактальный реактор"
+MapTitle[4]="Турбина"
+MapTitle[5]="Кодекс мудрости"
+MapTitle[6]="Давление"
+MapTitle[7]="Дробилка"
+MapTitle[8]="Галеон Кооса"
+MapTitle[9]="Буря"
+MapTitle[10]="Баррикада Ориона"
+MapTitle[11]="Лиандри"
+MapTitle[12]="Конвейер"
+MapTitle[13]="Горный монастырь"
+MapDescription[0]="Изучите основные правила Боя насмерть в этой тренировочной среде. Проверьте навыки на нетренированном противнике перед вступлением в Турнир."
+MapDescription[1]="ITV Oblivion - бронированный транспорт Лиандри, перевозящий новых участников к первым боям. Немногие знают, что сам корабль тоже является ареной."
+MapDescription[2]="Старый механический гараж был куплен Лиандри и превращён в небольшую, но смертоносную арену."
+MapDescription[3]="Этот переоборудованный плазменный реактор особенно популярен у зрителей. Выстрелы по жёлтым индикаторам открывают доступ к смертоносным потокам плазмы."
+MapDescription[4]="Заброшенная водоочистная станция стала тесной и стремительной ареной, где негде спрятаться от противника."
+MapDescription[5]="Кодекс Мудрости должен был стать хранилищем редких книг. После аварии с магмой проект закрыли и продали Лиандри для проведения боёв."
+MapDescription[6]="Ловушки - традиционное развлечение зрителей Турнира. Горнодобывающий комплекс Лиандри предлагает особенно опасный интерактивный вариант."
+MapDescription[7]="Бывший плавильный завод Лиандри известен как одна из самых кровавых арен Турнира и получил прозвище «Дробилка»."
+MapDescription[8]="Жители водного мира Коос считают этот древний транспортный галеон идеальной ареной для боя."
+MapDescription[9]="«Буря» была построена специально для Турнира. Многоуровневые помещения и небольшие укрытия делают её идеальной личной тренировочной ареной Ксана Кригора."
+MapDescription[10]="Древний инопланетный замок парит над электрической бурей. Баррикада Ориона - живописная и крайне опасная арена."
+MapDescription[11]="Типовой рудоперерабатывающий комплекс Лиандри расположен глубоко в земной литосфере. Фазовые щиты сдерживают невероятные жар и давление."
+MapDescription[12]="Этот перерабатывающий завод образует хорошо сбалансированную арену. Многоуровневая центральная камера и расположенная рядом плавильня постоянно держат бойцов в напряжении."
+MapDescription[13]="Горный монастырь в Непале когда-то служил местом медитации. Лиандри приобрела его за превосходные условия для проведения матчей."
+
+[LadderCTF]
+MapTitle[0]="Обучение CTF"
+MapTitle[1]="Лаборатория Нивен"
+MapTitle[2]="Встретившиеся миры"
+MapTitle[3]="Вечная пещера"
+MapTitle[4]="Центр Корет"
+MapTitle[5]="Железная перчатка"
+MapTitle[6]="Унылый аванпост"
+MapTitle[7]="Последний приказ"
+MapTitle[8]="Лавовый гигант"
+MapTitle[9]="Подлодка «Ноябрь»"
+MapDescription[0]="Изучите основные правила Захвата флага в этой тренировочной среде. Проверьте навыки на неподготовленной команде перед вступлением в Турнир."
+MapDescription[1]="Экспериментальный орбитальный ядерный реактор был заброшен после прекращения финансирования. Радиация и утечки отходов делают арену особенно опасной."
+MapDescription[2]="Этот древний астероид превращён в арену Турнира. Аномальная гравитация и снайперы вражеской команды делают его крайне опасным."
+MapDescription[3]="Руины неизвестной расы были приобретены отделом ксенобиологии Лиандри. После гибели семнадцати археологов Совет Турнира признал место особенно ценным для зрелищных боёв."
+MapDescription[4]="Комплекс на луне Корет когда-то служил перевалочным пунктом между орбитальными воротами и исследовательской станцией Зето."
+MapDescription[5]="«Железная перчатка» - одна из немногих арен, специально спроектированных для Турнира и командной игры."
+MapDescription[6]="Дальний болотный мир Вандарон 3 считается самым влажным местом галактики. Тесные помещения и бесконечный шум дождя делают службу здесь невыносимой."
+MapDescription[7]="«Последний приказ» - действующая станция переработки ядерных материалов Лиандри. Её сложная промышленная архитектура требует от команды предельно быстрой реакции."
+MapDescription[8]="Этот нестабильный мир вращается рядом со сверхплотным газовым гигантом. Гравитационные силы разрушили мантию планеты, поэтому бойцы используют специальные гравипояса."
+MapDescription[9]="Бой проходит вокруг списанной атомной подлодки класса «Ноябрь» в подземном доке. Пулемётные гнёзда и оборонительные позиции остаются ключом к победе."
+
+[LadderChal]
+MapTitle[0]="Фобос"
+MapTitle[1]="Морфеус"
+MapTitle[2]="Станция Зето"
+MapTitle[3]="Гипербласт"
+MapDescription[0]="Эта марсианская космическая станция находится между Марсом и Фобосом. Хаотическое вращение и искусственная гравитация задают стремительный ритм бою."
+MapDescription[1]="Три сверхвысоких здания поднимаются на многие мили. Разреженная атмосфера и ослабленная гравитация проверяют способность бойцов адаптироваться к экстремальным условиям."
+MapDescription[2]="Корпорация Лиандри превратила заброшенную исследовательскую станцию на ледяной луне Корет в арену Турнира."
+MapDescription[3]="Технология магнитного антивакуумного резонанса позволяет сражаться снаружи корабля-арены Ксана «Гипербласт». Одна ошибка - и вы окажетесь в открытом космосе."
+
+[LadderAS]
+MapTitle[0]="Обучение AS"
+MapTitle[1]="Фрегат"
+MapTitle[2]="Скоростной поезд"
+MapTitle[3]="Башня"
+MapTitle[4]="Мазон"
+MapTitle[5]="Дно океана"
+MapTitle[6]="Операция «Оверлорд»"
+MapDescription[0]="Изучите основные правила Штурма в этой тренировочной среде. Проверьте навыки на нетренированных соперниках перед вступлением в Турнир."
+MapDescription[1]="Древний земной военный корабль SS Victory отреставрирован и всё ещё держится на плаву. Двойная система безопасности защищает управление орудиями, однако уничтожение кормового котла автоматически откроет проход."
+MapDescription[2]="Корпорация Лиандри переоборудовала этот скоростной поезд для Турнира. К обычным опасностям боя добавляется возможность сорваться с поезда на полном ходу."
+MapDescription[3]="Этот древний замок в горах Румынии был приобретён Ксаном Кригором как тренировочная база. Атакующие должны открыть главные ворота и выбраться из замка, а защитники - помешать им."
+MapDescription[4]="В джунглях планеты Зевс 6 расположена крепость Мазон. Глубоко внутри находится огромный кристалл нестабильного Таридия, парящий между электродами над сверхпроводящей жидкостью."
+MapDescription[5]="Подводная Станция 5, построенная для глубоководных исследований, осталась без финансирования, пока Корпорация Лиандри не предложила своё своеобразное спасение."
+MapDescription[6]="Организаторы Турнира воссоздали одну из самых жестоких операций Второй мировой войны. Штурм укреплённого берега станет тяжёлым испытанием как для атакующих, так и для защитников."
+
+[Ladder]
+Titles[0]="Необученный"
+Titles[1]="Претендент"
+Titles[2]="Лёгкий вес"
+Titles[3]="Тяжёлый вес"
+Titles[4]="Военачальник"
+Titles[5]="Боевой мастер"
+Titles[6]="Чемпион"
+
+[ServerInfo]
+ServerInfoText="Информация о сервере"
+ContactInfoText="Контактная информация"
+NameText="Название:"
+AdminText="Администратор:"
+EMailText="E-mail:"
+UnknownText="Неизвестно"
+MOTD="Сообщение дня"
+ServerStatsText="Статистика сервера"
+GamesHostedText="Игр:"
+FragsLoggedText="Фрагов:"
+VictimsText="Жертв:"
+GameStatsText="Статистика игры"
+GameTypeText="Режим игры:"
+PlayersText="Игроки:"
+FragsText="Всего фрагов:"
+TopPlayersText="Лучшие игроки [фрагов в час]"
+BestNameText="Имя"
+BestFPHText="Игрок [Ф/Ч]"
+BestRecordSetText="Рекорд установлен"
+BotText="Боты"
+
+[ServerInfoCTF]
+FlagsCapturedText="Захвачено флагов:"

@@ -1,0 +1,68 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="«Станция 5» на дне океана"
+IdealPlayerCount="8-10"
+LevelEnterText="Захватите подводную базу!"
+
+[ZoneInfo5]
+ZoneName="Центральная зона"
+
+[ZoneInfo3]
+ZoneName="Большой шлюз"
+
+[ZoneInfo4]
+ZoneName="Малый шлюз"
+
+[ZoneInfo1]
+ZoneName="Подводная лодка"
+
+[ZoneInfo2]
+ZoneName="Командный центр"
+
+[ZoneInfo7]
+ZoneName="Зал"
+
+[LevelSummary]
+LevelEnterText="Захватите подводную базу!"
+Title="«Станция 5» на дне океана"
+IdealPlayerCount="8-10"
+
+[SpecialEvent0]
+Message="Терминал 1 отключен."
+
+[FortStandard0]
+FortName="Терминал 3"
+DestroyedMessage="уничтожен!!"
+
+[SpecialEvent10]
+Message="Терминал 4 отключен."
+
+[FortStandard1]
+FortName="Терминал 1"
+DestroyedMessage="уничтожен!"
+
+[FortStandard2]
+FortName="Терминал 2"
+DestroyedMessage="уничтожен!!"
+
+[FortStandard3]
+FortName="Терминал 4"
+DestroyedMessage="уничтожен!"
+
+[AssaultInfo0]
+ObjDesc[0]="Плывите к базе, расположенной под подводной лодкой. Внутри базы есть 4 терминала с подключенными к ним клавиатурами, которые необходимо уничтожить, чтобы сделать базу бесполезной. Уничтожьте терминал 1. Терминалы могут быть уничтожены в любом порядке."
+ObjDesc[1]="Уничтожьте терминал 2. Терминалы могут быть уничтожены в любом порядке."
+ObjDesc[2]="Уничтожьте терминал 3. Терминалы могут быть уничтожены в любом порядке."
+ObjDesc[3]="Уничтожьте терминал 4. Терминалы могут быть уничтожены в любом порядке."
+
+[ZoneInfo6]
+ZoneName="Шахта лифта"
+
+[SpecialEvent15]
+Message="Терминал 3 отключен."
+
+[SpecialEvent5]
+Message="Терминал 2 отключен."

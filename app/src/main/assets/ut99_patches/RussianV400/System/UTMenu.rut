@@ -1,0 +1,473 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[Public]
+Object=(Name=UTMenu.UTConsole,Class=Class,MetaClass=Engine.Console)
+
+[UTConsole]
+ClassCaption="Консоль Unreal Tournament"
+
+[OnlineServices]
+MPlayer="-"
+Heat="-"
+WON="-"
+
+[PhysicalChildWindow]
+PhysicalTaunts[0]="Простая насмешка"
+PhysicalTaunts[1]="Движение тазом"
+PhysicalTaunts[2]="Победный танец"
+PhysicalTaunts[3]="Взмах рукой"
+WindowTitle=""
+
+[UTLadder]
+MapText="Карта:"
+AuthorText="Автор:"
+FragText="Лимит фрагов:"
+TeamScoreText="Лимит очков команды:"
+
+[MatchButton]
+UnknownText="? Неизвестно ?"
+
+[ManagerWindow]
+DMText="Бой насмерть"
+DOMText="Доминирование"
+CTFText="Захват флага"
+ASText="Штурм"
+ChallengeText="Вызов"
+ChallengeString="ФИНАЛЬНЫЙ ТУРНИРНЫЙ ВЫЗОВ"
+ChalPosString="Титул:"
+TrophyText="Трофейный зал"
+RankString[0]="Титул в Бою насмерть:"
+RankString[1]="Титул в Доминировании:"
+RankString[2]="Титул в Захвате Флага:"
+RankString[3]="Титул в Штурме:"
+MatchesString="Выиграно матчей:"
+
+[SpeechWindow]
+Options[0]="Подтверждение"
+Options[1]="Огонь по своим"
+Options[2]="Приказы"
+Options[3]="Насмешки"
+Options[4]="Разное"
+Options[5]="Жесты"
+Options[6]="Приказать этому боту"
+WindowTitle="Приказы"
+
+[SlotWindow]
+EmptyText="СВОБОДНО"
+AvgRankStr="Средний титул:"
+CompletedStr="Матчей выиграно:"
+
+[NewCharacterWindow]
+MaleText="мужской"
+FemaleText="женский"
+SkillText[0]="Новичок"
+SkillText[1]="Средний"
+SkillText[2]="Опытный"
+SkillText[3]="Умелый"
+SkillText[4]="Адепт"
+SkillText[5]="Мастер"
+SkillText[6]="Нечеловек"
+SkillText[7]="Божественный"
+CCText="   Создание персонажа"
+TeamNameString="Название команды:"
+NameText="Имя"
+SexText="Пол"
+TeamText="Команда"
+FaceText="Лицо"
+SkillsText="Мастерство"
+
+[UTIndivBotSetupClient]
+SkillText="Мастерство"
+SkillHelp="Отрегулировать мастерство бота относительно базового уровня."
+VoicePackText="Голос"
+VoicePackHelp="Выберите голос для насмешек и команд бота."
+FavoriteWeaponText="Любимое оружие:"
+FavoriteWeaponHelp="Выберите любимое оружие бота."
+NoFavoriteWeapon="(нет любимого)"
+AccuracyText="Меткость:"
+AccuracyHelp="Изменить меткость бота."
+AlertnessText="Бдительность:"
+AlertnessHelp="Изменить бдительность бота."
+CampingText="Кемперство:"
+CampingHelp="Изменить склонность бота к кемперству."
+CombatStyleText="Стиль боя:"
+CombatStyleHelp="Выберите стиль боя бота."
+CombatStyleValues[1]=0.500000
+CombatStyleValues[2]=1.000000
+CombatStyleValues[3]=-0.500000
+CombatStyleValues[4]=-1.000000
+CombatStyleNames[0]="Обычный"
+CombatStyleNames[1]="Агрессивный"
+CombatStyleNames[2]="Берсерк"
+CombatStyleNames[3]="Осторожный"
+CombatStyleNames[4]="Избегающий"
+JumpyText="Прыгучесть:"
+JumpyHelp="Определяет склонность бота часто прыгать."
+
+[UTChallengeHUDConfig]
+ShowHUDText="Включить дисплей"
+ShowHUDHelp="Отображать Игровой дисплей (HUD)."
+ShowWeaponsText="Панель оружия"
+ShowWeaponsHelp="Отображать панель оружия на дисплее."
+ShowStatusText="Статус игрока"
+ShowStatusHelp="Отображать состояние здоровья и брони игрока на дисплее."
+ShowAmmoText="Счётчик патронов"
+ShowAmmoHelp="Отображать текущее количество патронов."
+ShowTeamInfoText="Данные о команде"
+ShowTeamInfoHelp="Отображать информацию о команде."
+ShowFacesText="Область чата"
+ShowFacesHelp="Отображать область чата, сообщений и убийств."
+ShowFragsText="Фраги"
+ShowFragsHelp="Отображать количество фрагов."
+UseTeamColorText="Цвет команды в командных играх"
+UseTeamColorHelp="Использовать цвет команды для дисплея в командных играх."
+HUDColorText="Цвет дисплея"
+HUDColorHelp="Выберите цвет дисплея."
+HUDColorNames[0]="Красный"
+HUDColorNames[1]="Фиолетовый"
+HUDColorNames[2]="Светло-синий"
+HUDColorNames[3]="Бирюзовый"
+HUDColorNames[4]="Зелёный"
+HUDColorNames[5]="Оранжевый"
+HUDColorNames[6]="Золотой"
+HUDColorNames[7]="Розовый"
+HUDColorNames[8]="Белый"
+HUDColorNames[9]="Тёмно-синий"
+HUDColorNames[10]="Другой"
+HUDColorValues[0]="16,0,0"
+HUDColorValues[1]="16,0,16"
+HUDColorValues[2]="0,8,16"
+HUDColorValues[3]="0,16,16"
+HUDColorValues[4]="0,16,0"
+HUDColorValues[5]="16,8,0"
+HUDColorValues[6]="16,16,0"
+HUDColorValues[7]="16,0,8"
+HUDColorValues[8]="16,16,16"
+HUDColorValues[9]="0,0,16"
+HUDColorValues[10]="cust"
+HUDRText="Красный"
+HUDRHelp="Настройте красную составляющую цвета дисплея."
+HUDGText="Зелёный"
+HUDGHelp="Настройте зелёную составляющую цвета дисплея."
+HUDBText="Синий"
+HUDBHelp="Настройте синюю составляющую цвета дисплея."
+OpacityText="Прозрачность дисплея"
+OpacityHelp="Отрегулировать прозрачность дисплея."
+HUDScaleText="Размер элементов"
+HUDScaleHelp="Отрегулировать размер элементов дисплея."
+WeaponScaleText="Размер значков оружия"
+WeaponScaleHelp="Отрегулировать размер значков оружия."
+StatusScaleText="Размер статуса"
+CrosshairText="Вид прицела"
+CrosshairHelp="Выберите прицел в центре экрана."
+CrosshairColorText="Цвет прицела"
+CrosshairColorHelp="Выберите цвет прицела."
+CrosshairRText="Красный"
+CrosshairRHelp="Настройте красную составляющую цвета прицела."
+CrosshairGText="Зелёный"
+CrosshairGHelp="Настройте зелёную составляющую цвета прицела."
+CrosshairBText="Синий"
+CrosshairBHelp="Настройте синюю составляющую цвета прицела."
+DefaultsText="Сброс"
+DefaultsHelp="Сбросить настройки дисплея."
+StatusScaleHelp="Отрегулировать размер индикатора состояния игрока."
+
+[SpeechBinderCW]
+LabelText="На клавишу:"
+NotApplicable="Н/П"
+AllString="Всем"
+LeaderString="Лидеру команды"
+PlayerString="Напарнику"
+NotBound="Не назначено"
+DefaultsText="Сброс"
+DefaultsHelp="Снять все речевые привязки."
+
+[TeamBrowser]
+NameString="Имя:"
+ClassString="Классификация:"
+BrowserName="Состав команды"
+
+[EnemyBrowser]
+NameString="Имя:"
+ClassString="Классификация:"
+BrowserName="Список врагов"
+
+[ObjectiveBrowser]
+BrowserName="Цели миссии"
+OrdersTransmissionText="Дальнейшие указания"
+
+[InGameObjectives]
+ObjectiveString="Задача"
+BrowserName="Цели миссии"
+OrdersTransmissionText="Дальнейшие указания"
+
+[UTPlayerSetupClient]
+VoicePackText="Голос"
+VoicePackHelp="Выберите голос для насмешек и команд игрока."
+SpectatorText="Играть как зритель"
+SpectatorHelp="Наблюдать за игрой в качестве зрителя."
+StatsText="Пароль ngWorldStats"
+StatsButtonText="Изменить"
+
+[UTTeamRCWindow]
+TeamScoreText="Очков для победы"
+TeamScoreHelp="При достижении этого числа очков игра закончится. 0 отключает лимит."
+MaxTeamsText="Лимит команд"
+MaxTeamsHelp="Максимальное число команд в игре."
+FFText="Огонь по своим:"
+FFHelp="Отрегулировать урон по товарищам."
+BalancePlayersText="Автобаланс команд"
+BalancePlayersHelp="Автоматически распределять игроков для баланса команд."
+
+[UTRulesCWindow]
+JumpMatchText="Высокие прыжки"
+JumpMatchHelp="Если отмечено, игроки смогут прыгать значительно выше."
+TourneyText="Турнирный режим"
+TourneyHelp="Перед началом матча каждый игрок должен подтвердить готовность клавишей огня."
+AllowFOVText="Изменение поля зрения"
+AllowFOVHelp="Разрешить игрокам изменять поле зрения."
+ForceRespawnText="Принудительное возрождение"
+ForceRespawnHelp="Автоматически возрождать игроков после смерти."
+
+[SpeechChildWindow]
+WindowTitle=""
+
+[UTBotConfigClient]
+BalanceTeamsText="Баланс команд ботами"
+BalanceTeamsHelp="Боты автоматически меняют команды для сохранения баланса."
+DumbDownText="Улучшенный ИИ команд"
+DumbDownHelp="Включить улучшенный командный искусственный интеллект ботов."
+MinPlayersText="Минимум игроков"
+MinPlayersHelp="Боты заполняют игру до указанного числа игроков. 0 отключает ботов."
+Skills[2]="Опытный"
+Skills[3]="Умелый"
+Skills[4]="Адепт"
+Skills[5]="Мастер"
+Skills[6]="Нечеловек"
+Skills[7]="Божественный"
+SkillTaunts[1]="Они знают, как убивать."
+SkillTaunts[2]="Не веди себя дерзко."
+SkillTaunts[3]="Кто тут крутой?"
+SkillTaunts[4]="Лучше тебе играть хорошо."
+SkillTaunts[5]="Надеюсь, тебе нравится возрождаться."
+SkillTaunts[6]="Ты уже труп."
+SkillTaunts[7]="Я Альфа и Омега."
+Skills[0]="Новичок"
+Skills[1]="Средний"
+
+[SpeechMiniDisplay]
+NameString="Имя:"
+OrdersString="Приказ:"
+LocationString="Местоположение:"
+HumanString="Нет <Человек>"
+
+[OrdersChildWindow]
+WindowTitle=""
+
+[TargetChildWindow]
+AllString="Все"
+WindowTitle=""
+
+[UTSettingsCWindow]
+TranslocText="Транслокатор"
+TranslocHelp="Выдать каждому игроку Транслокатор."
+AirControlText="Управление в воздухе"
+AirControlHelp="Отрегулировать управление игроком в воздухе."
+
+[UTMenuStartMatchCW]
+ChangeLevelsText="Автосмена карт"
+ChangeLevelsHelp="Менять уровни согласно списку карт данного режима."
+
+[UTAudioClientWindow]
+AutoTauntText="Автонасмешки"
+AutoTauntHelp="Автоматически отправлять насмешки после фрага."
+VoiceTauntsText="Голосовые насмешки"
+VoiceTauntsHelp="Если отмечено, будут слышны голосовые насмешки других игроков."
+Use3DHardwareText="Аппаратный 3D-звук"
+Use3DHardwareHelp="Использовать 3D-аудиооборудование."
+UseSurroundSoundText="Объёмный звук"
+UseSurroundSoundHelp="Использовать объёмный звук."
+ConfirmHardwareTitle="Подтвердите аппаратный 3D-звук"
+ConfirmHardwareText="Аппаратный 3D-звук требует совместимой звуковой карты и может снизить производительность.\n\nВключить эту функцию?"
+ConfirmSurroundTitle="Подтвердите объёмный звук"
+ConfirmSurroundText="Объёмный звук требует совместимого оборудования.\n\nВключить эту функцию?"
+NoMatureLanguageText="Без матерных насмешек"
+NoMatureLanguageHelp="Не проигрывать голосовые насмешки с нецензурной бранью."
+AnnouncerVolumeText="Громкость диктора"
+AnnouncerVolumeHelp="Регулирует громкость диктора."
+MessageSettingsText="Голосовые сообщения"
+MessageSettingsHelp="Определяет, какие голосовые сообщения слышны."
+MessageSettings[0]="Все"
+MessageSettings[1]="Без автонасмешек"
+MessageSettings[2]="Без насмешек"
+MessageSettings[3]="Никакие"
+
+[UTInputOptionsCW]
+InstantRocketText="Моментальные ракеты"
+InstantRocketHelp="Стрелять ракетами сразу, без зарядки нескольких ракет."
+SpeechBinderText="Привязка речи"
+SpeechBinderHelp="Привязать насмешки и приказы к клавишам."
+
+[ngWorldSecretClient]
+DescText[0]="Это ваш пароль ngWorldStats. Он используется вместе с"
+DescText[1]="именем игрока, чтобы отделить вашу игровую статистику"
+DescText[2]="от статистики других игроков. При смене имени или пароля"
+DescText[3]="в системе ngWorldStats будет создана новая личность."
+DescText[4]="Можно использовать несколько личностей. Используйте предложенный"
+DescText[5]="пароль или выберите собственный и используйте его постоянно."
+SecretText="Пароль ngWorldStats:"
+OKText="ОК"
+SecretDesc="Придумайте пароль для уникальной сетевой статистики ngWorldStats."
+QuitHelp="Выберите [Да], чтобы сохранить новый пароль."
+QuitTitle="Подтвердите изменение пароля"
+QuitText="При использовании нового пароля будет создан новый аккаунт ngWorldStats. Продолжить?"
+EmptyTitle="Подтвердите удаление пароля"
+EmptyText="Без пароля сетевая статистика не будет накапливаться. Продолжить?"
+
+[KillGameQueryClient]
+QueryText="Вы уверены, что хотите удалить это сохранение?"
+YesText="Да"
+NoText="Нет"
+
+[UTLadderChal]
+TrophyMap="EOL_Challenge.unr"
+LadderName="Финальный вызов"
+
+[FreeSlotsClient]
+QueryText="Сперва освободите слот!"
+DoneText="ОК"
+
+[UTLadderDM]
+TrophyMap="EOL_DeathMatch.unr"
+LadderName="Бой насмерть"
+
+[UTLadderDOM]
+TrophyMap="EOL_Domination.unr"
+LadderName="Доминирование"
+
+[UTStartGameCW]
+DedicatedText="Выделенный"
+DedicatedHelp="Запустить выделенный сервер."
+ServerText="Сервер"
+ConfirmTitle="Подтверждение запуска игры"
+ConfirmText="Вы собираетесь запустить сетевую игру с ngWorldStats, но пароль ngWorldStats не задан. Без пароля статистика игры не будет сохранена. Задать пароль сейчас?"
+
+[UTLadderCTF]
+ShortTitle="CTF"
+TrophyMap="EOL_CTF.unr"
+LadderName="Захват флага"
+
+[UTLadderAS]
+TrophyMap="EOL_Assault.unr"
+LadderName="Штурм"
+
+[KillGameQueryWindow]
+WindowTitle="Подтвердите удаление игры"
+
+[UTGameMenu]
+NewGameName="Начать Unreal Tournament (&S)"
+NewGameHelp="Начать новый Турнир!"
+LoadGameName="Продолжить сохранённый турнир (&R)"
+LoadGameHelp="Возобновить сохранённую игру Unreal Tournament."
+BotmatchName="Начать тренировочную сессию (&P)"
+BotmatchHelp="Начать тренировочную игру против ботов."
+ReturnToGameName="Вернуться в текущую игру (&C)"
+ReturnToGameHelp="Закрыть меню и вернуться в текущую игру. ESC также возвращает в игру."
+QuitName="Выйти (&Q)"
+QuitHelp="Сохранить настройки и выйти из Unreal Tournament."
+QuitTitle="Подтвердите выход"
+QuitText="Вы уверены, что хотите выйти?"
+
+[SpeechBinderWindow]
+WindowTitle="Привязка речи"
+
+[UTConfigIndivBotsWindow]
+WindowTitle="Настроить отдельных ботов"
+
+[FreeSlotsWindow]
+WindowTitle="Все слоты заполнены"
+
+[UTBotmatchWindow]
+WindowTitle="Начать тренировочную сессию"
+
+[ngWorldSecretWindow]
+WindowTitle="Пароль ngWorldStats"
+
+[UTCustomizeClientWindow]
+LabelList[0]="Управление,Огонь"
+LabelList[1]="Альтернативный огонь"
+LabelList[2]="Вперёд"
+LabelList[3]="Назад"
+LabelList[4]="Стрейф влево"
+LabelList[5]="Стрейф вправо"
+LabelList[6]="Повернуть налево"
+LabelList[7]="Повернуть направо"
+LabelList[8]="Прыгнуть/Вверх"
+LabelList[9]="Присесть/Вниз"
+LabelList[10]="Обзор мышью"
+LabelList[11]="Взглянуть вверх"
+LabelList[12]="Взглянуть вниз"
+LabelList[13]="Центровка взгляда"
+LabelList[14]="Идти"
+LabelList[15]="Стрейф"
+LabelList[16]="Притвориться мёртвым"
+LabelList[17]="Насмешки/чат,Чат"
+LabelList[18]="Командный чат"
+LabelList[19]="Голосовое меню"
+LabelList[20]="Жест тазом"
+LabelList[21]="Взмах"
+LabelList[22]="Победа 1"
+LabelList[23]="Победа 2"
+LabelList[24]="Оружие,Следующее"
+LabelList[25]="Предыдущее"
+LabelList[26]="Бросить оружие"
+LabelList[27]="Выбрать лучшее"
+LabelList[28]="Транслокатор"
+LabelList[29]="Бензопила"
+LabelList[30]="Ударный молот"
+LabelList[31]="Enforcer"
+LabelList[32]="Шок-ружьё"
+LabelList[33]="GES-биоружьё"
+LabelList[34]="Pulse Gun"
+LabelList[35]="Снайперская винтовка"
+LabelList[36]="Ripper"
+LabelList[37]="Minigun"
+LabelList[38]="Flak Cannon"
+LabelList[39]="Ракетница"
+LabelList[40]="Redeemer"
+LabelList[41]="Вид от товарища,Товарищ 1"
+LabelList[42]="Товарищ 2"
+LabelList[43]="Товарищ 3"
+LabelList[44]="Товарищ 4"
+LabelList[45]="Товарищ 5"
+LabelList[46]="Товарищ 6"
+LabelList[47]="Товарищ 7"
+LabelList[48]="Товарищ 8"
+LabelList[49]="Товарищ 9"
+LabelList[50]="Товарищ 10"
+LabelList[51]="Игровой дисплей,Увеличить"
+LabelList[52]="Уменьшить"
+LabelList(53)="Консоль,Клавиша консоли"
+LabelList(54)="Быстрая консоль"
+
+[UTPasswordWindow]
+WindowTitle="Введите пароль сервера"
+
+[UTPasswordCW]
+PasswordText="Пароль:"
+
+[UTServerSetupPage]
+GamePasswordText="Пароль для игры"
+GamePasswordHelp="Пароль, необходимый игрокам для входа на сервер."
+AdminPasswordText="Пароль админа"
+AdminPasswordHelp="Пароль для доступа к административным командам сервера."
+EnableWebserverText="WWW-администрирование"
+EnableWebserverHelp="Разрешить удалённое администрирование сервера через браузер."
+WebAdminUsernameText="WWW-логин"
+WebAdminUsernameHelp="Имя пользователя для Web-панели администрирования."
+WebAdminPasswordText="WWW-пароль"
+WebAdminPasswordHelp="Пароль для Web-панели администрирования."
+ListenPortText="Порт Web-сервера"
+ListenPortHelp="Порт удалённого Web-администрирования."

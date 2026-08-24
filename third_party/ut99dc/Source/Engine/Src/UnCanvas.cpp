@@ -180,6 +180,188 @@ static inline void DrawChar
 	unguardSlow;
 }
 
+#if (defined(__ANDROID__) || defined(PLATFORM_ANDROID)) && !UNICODE
+// UT99_ANDROID_V201_CYRILLIC_FONT_ATLAS:
+// The original v400 font packages contain Western 8-bit glyph pages.  Keep
+// those packages untouched and provide only the CP1251 high-byte glyphs from
+// a small raster atlas installed beside the System files.  This avoids package
+// GUID/version changes and works identically on ARMv7 and ARM64.
+struct FUT99AndroidCyrillicGlyph
+{
+	_WORD U, V, W, H, Advance;
+};
+
+static UTexture* GUT99AndroidCyrillicTexture = NULL;
+static FUT99AndroidCyrillicGlyph GUT99AndroidCyrillicGlyphs[2][128];
+static INT GUT99AndroidCyrillicCellHeight = 0;
+static UBOOL GUT99AndroidCyrillicLoadAttempted = 0;
+
+static UBOOL UT99AndroidIsRussianLanguage()
+{
+	const TCHAR* Language = UObject::GetLanguage();
+	if( !Language ) return 0;
+	return appStricmp(Language,TEXT("rut"))==0
+		|| appStricmp(Language,TEXT("ru"))==0
+		|| appStricmp(Language,TEXT("rus"))==0;
+}
+
+static _WORD UT99AndroidReadLE16( const BYTE* Ptr )
+{
+	return (_WORD)(Ptr[0] | ((_WORD)Ptr[1]<<8));
+}
+
+static UBOOL UT99AndroidLoadCyrillicAtlas()
+{
+	if( GUT99AndroidCyrillicTexture )
+		return 1;
+	if( GUT99AndroidCyrillicLoadAttempted )
+		return 0;
+	GUT99AndroidCyrillicLoadAttempted = 1;
+
+	TArray<BYTE> Data;
+	if( !appLoadFileToArray(Data,TEXT("CyrillicFontAtlas.dat"),GFileManager) || Data.Num()<16 )
+	{
+		debugf( NAME_Localization, TEXT("Android Cyrillic: CyrillicFontAtlas.dat not found; stock font fallback remains active") );
+		return 0;
+	}
+
+	static const BYTE Magic[8] = {'U','T','R','U','C','P','1',0};
+	if( appMemcmp(&Data(0),Magic,8)!=0 )
+	{
+		debugf( NAME_Warning, TEXT("Android Cyrillic: invalid font atlas signature") );
+		return 0;
+	}
+
+	const BYTE* Header=&Data(8);
+	INT Width      = UT99AndroidReadLE16(Header+0);
+	INT Height     = UT99AndroidReadLE16(Header+2);
+	INT CellHeight = UT99AndroidReadLE16(Header+4);
+	INT GlyphCount = UT99AndroidReadLE16(Header+6);
+	const INT RecordSize=10;
+	const INT RecordsOffset=16;
+	const INT PixelsOffset=RecordsOffset + GlyphCount*RecordSize;
+	if( Width<=0 || Height<=0 || (Width&(Width-1)) || (Height&(Height-1))
+	 || CellHeight<=0 || GlyphCount!=256 || PixelsOffset<0
+	 || PixelsOffset + Width*Height != Data.Num() )
+	{
+		debugf( NAME_Warning, TEXT("Android Cyrillic: invalid font atlas geometry %ix%i glyphs=%i bytes=%i"), Width, Height, GlyphCount, Data.Num() );
+		return 0;
+	}
+
+	for( INT i=0; i<GlyphCount; i++ )
+	{
+		const BYTE* R=&Data(RecordsOffset+i*RecordSize);
+		FUT99AndroidCyrillicGlyph& G=GUT99AndroidCyrillicGlyphs[i/128][i%128];
+		G.U       = UT99AndroidReadLE16(R+0);
+		G.V       = UT99AndroidReadLE16(R+2);
+		G.W       = UT99AndroidReadLE16(R+4);
+		G.H       = UT99AndroidReadLE16(R+6);
+		G.Advance = UT99AndroidReadLE16(R+8);
+		if( G.W==0 || G.H==0 || G.U+G.W>Width || G.V+G.H>Height )
+		{
+			debugf( NAME_Warning, TEXT("Android Cyrillic: invalid glyph record %i"), i );
+			return 0;
+		}
+	}
+
+	UTexture* Texture = new(UObject::GetTransientPackage(),TEXT("UT99AndroidCyrillicAtlas"))UTexture;
+	Texture->Init( Width, Height );
+	Texture->PolyFlags = PF_Masked;
+	Texture->PostLoad();
+	if( !Texture->Palette )
+		return 0;
+	Texture->Palette->Colors.Empty();
+	Texture->Palette->Colors.AddZeroed(256);
+	for( INT i=0; i<256; i++ )
+		Texture->Palette->Colors(i)=FColor(i,i,i,i);
+	appMemcpy( &Texture->Mips(0).DataArray(0), &Data(PixelsOffset), Width*Height );
+	Texture->CreateColorRange();
+	Texture->AddToRoot();
+
+	GUT99AndroidCyrillicTexture=Texture;
+	GUT99AndroidCyrillicCellHeight=CellHeight;
+	debugf( NAME_Localization, TEXT("Android Cyrillic: loaded CP1251 fallback atlas %ix%i"), Width, Height );
+	return 1;
+}
+
+static void UT99AndroidGetStockCharSize( UFont* Font, TCHAR InCh, INT& Width, INT& Height )
+{
+	Width=Height=0;
+	if( !Font ) return;
+	INT Ch=(TCHARU)InCh;
+	INT Page=Ch/Font->CharactersPerPage;
+	INT Index=Ch-Page*Font->CharactersPerPage;
+	if( Page<Font->Pages.Num() && Index<Font->Pages(Page).Characters.Num() )
+	{
+		FFontCharacter& Char=Font->Pages(Page).Characters(Index);
+		Width=Char.USize;
+		Height=Char.VSize;
+	}
+}
+
+static INT UT99AndroidCyrillicFaceForFont( UFont* Font )
+{
+	if( !Font ) return 0;
+	const TCHAR* Name=Font->GetName();
+	return (appStrnicmp(Name,TEXT("TahomaB"),7)==0 || appStricmp(Name,TEXT("UTFont40"))==0) ? 1 : 0;
+}
+
+static UBOOL UT99AndroidGetCyrillicGlyph( UFont* Font, INT Ch, FUT99AndroidCyrillicGlyph*& Glyph, INT& DrawW, INT& DrawH )
+{
+	Glyph=NULL;
+	DrawW=DrawH=0;
+	if( Ch<0x80 || Ch>0xff || !UT99AndroidIsRussianLanguage() || !UT99AndroidLoadCyrillicAtlas() )
+		return 0;
+
+	Glyph=&GUT99AndroidCyrillicGlyphs[UT99AndroidCyrillicFaceForFont(Font)][Ch-0x80];
+	static UBOOL LoggedFirstGlyph=0;
+	if( !LoggedFirstGlyph )
+	{
+		debugf( NAME_Localization, TEXT("Android Cyrillic: first fallback glyph byte=0x%02x language=%s font=%s"),
+			Ch, UObject::GetLanguage(), Font ? Font->GetName() : TEXT("<null>") );
+		LoggedFirstGlyph=1;
+	}
+	INT RefW=0, RefH=0;
+	UT99AndroidGetStockCharSize(Font,TEXT('M'),RefW,RefH);
+	if( RefH<=0 ) UT99AndroidGetStockCharSize(Font,TEXT('A'),RefW,RefH);
+	if( RefH<=0 ) RefH=GUT99AndroidCyrillicCellHeight;
+	FLOAT Scale=(FLOAT)RefH/(FLOAT)GUT99AndroidCyrillicCellHeight;
+	DrawW=Max<INT>(1,(INT)(Glyph->Advance*Scale+0.5f));
+	DrawH=Max<INT>(1,RefH);
+	return 1;
+}
+
+static void UT99AndroidDrawCyrillicGlyph
+(
+	DWORD Flags, UCanvas* Canvas, FTextureInfo& Info,
+	INT X, INT Y, INT XL, INT YL,
+	const FUT99AndroidCyrillicGlyph& Glyph, FPlane Color, UBOOL bClip
+)
+{
+	FLOAT U=(FLOAT)Glyph.U, V=(FLOAT)Glyph.V;
+	FLOAT UL=(FLOAT)Glyph.W, VL=(FLOAT)Glyph.H;
+	FLOAT OX=(FLOAT)X, OY=(FLOAT)Y, OXL=(FLOAT)XL, OYL=(FLOAT)YL;
+	if( bClip )
+	{
+		if( OX<0.f ) { FLOAT Cut=-OX; U+=Cut*UL/OXL; UL-=Cut*UL/OXL; OXL-=Cut; OX=0.f; }
+		if( OY<0.f ) { FLOAT Cut=-OY; V+=Cut*VL/OYL; VL-=Cut*VL/OYL; OYL-=Cut; OY=0.f; }
+		if( OX+OXL>Canvas->ClipX ) { FLOAT Keep=Canvas->ClipX-OX; UL*=Keep/OXL; OXL=Keep; }
+		if( OY+OYL>Canvas->ClipY ) { FLOAT Keep=Canvas->ClipY-OY; VL*=Keep/OYL; OYL=Keep; }
+	}
+	if( OXL<=0.f || OYL<=0.f || UL<=0.f || VL<=0.f )
+		return;
+
+	FSceneNode* Frame=Canvas->Frame;
+	FLOAT DX=Canvas->OrgX+OX, DY=Canvas->OrgY+OY;
+	if( DX<0.f ) { FLOAT Cut=-DX; U+=Cut*UL/OXL; UL-=Cut*UL/OXL; OXL-=Cut; DX=0.f; }
+	if( DY<0.f ) { FLOAT Cut=-DY; V+=Cut*VL/OYL; VL-=Cut*VL/OYL; OYL-=Cut; DY=0.f; }
+	if( DX+OXL>Frame->X ) { FLOAT Keep=Frame->X-DX; UL*=Keep/OXL; OXL=Keep; }
+	if( DY+OYL>Frame->Y ) { FLOAT Keep=Frame->Y-DY; VL*=Keep/OYL; OYL=Keep; }
+	if( !(Flags&PF_Invisible) && OXL>0.f && OYL>0.f && UL>0.f && VL>0.f )
+		Frame->Viewport->RenDev->DrawTile( Frame, Info, DX, DY, OXL, OYL, U, V, UL, VL, NULL, Canvas->Z, Color, FPlane(0,0,0,0), Flags );
+}
+#endif
+
 //
 // Draw a string of characters.
 // - returns pixels drawn
@@ -202,6 +384,10 @@ static inline INT DrawString
 	// Font texture pages.
 	FTextureInfo Infos[5];
 	Infos[0].Texture=Infos[1].Texture=Infos[2].Texture=Infos[3].Texture=Infos[4].Texture=NULL;
+#if (defined(__ANDROID__) || defined(PLATFORM_ANDROID)) && !UNICODE
+	FTextureInfo CyrillicInfo;
+	CyrillicInfo.Texture=NULL;
+#endif
 
 	// Draw all characters in string.
 	INT LineX = 0;
@@ -228,6 +414,27 @@ static inline INT DrawString
 				}
 			}
 		}
+
+#if (defined(__ANDROID__) || defined(PLATFORM_ANDROID)) && !UNICODE
+		FUT99AndroidCyrillicGlyph* CyrillicGlyph=NULL;
+		INT CyrillicW=0, CyrillicH=0;
+		if( UT99AndroidGetCyrillicGlyph(Font,Ch,CyrillicGlyph,CyrillicW,CyrillicH) )
+		{
+			if( CyrillicInfo.Texture!=GUT99AndroidCyrillicTexture )
+			{
+				if( CyrillicInfo.Texture ) CyrillicInfo.Texture->Unlock(CyrillicInfo);
+				GUT99AndroidCyrillicTexture->Lock(CyrillicInfo,Canvas->Viewport->CurrentTime,0,Canvas->Viewport->RenDev);
+			}
+
+			INT CharWidth=bDrawUnderline ? Min(UnderlineWidth,CyrillicW) : CyrillicW;
+			UT99AndroidDrawCyrillicGlyph(Flags,Canvas,CyrillicInfo,LineX+DrawX,DrawY,CharWidth,CyrillicH,*CyrillicGlyph,Color,bClip);
+			if( bDrawUnderline ) CharWidth=UnderlineWidth;
+			if( !bUnderlineNext ) LineX+=(INT)(CharWidth+Canvas->SpaceX);
+			else UnderlineWidth=CyrillicW;
+			bDrawUnderline=bUnderlineNext;
+			continue;
+		}
+#endif
 
 		// Process character if it's valid.
 		INT NewPage = Ch / Font->CharactersPerPage;
@@ -296,6 +503,10 @@ static inline INT DrawString
 	for( INT i=0; i<5; i++ )
 		if( Infos[i].Texture )
 			Infos[i].Texture->Unlock( Infos[i] );
+#if (defined(__ANDROID__) || defined(PLATFORM_ANDROID)) && !UNICODE
+	if( CyrillicInfo.Texture )
+		CyrillicInfo.Texture->Unlock( CyrillicInfo );
+#endif
 
 	return LineX;
 	unguardSlow;
@@ -307,6 +518,11 @@ static inline INT DrawString
 static inline void GetCharSize( UFont* Font, TCHAR InCh, INT& Width, INT& Height )
 {
 	guardSlow(GetCharSize);
+#if (defined(__ANDROID__) || defined(PLATFORM_ANDROID)) && !UNICODE
+	FUT99AndroidCyrillicGlyph* Glyph=NULL;
+	if( !UT99AndroidGetCyrillicGlyph(Font,(TCHARU)InCh,Glyph,Width,Height) )
+		UT99AndroidGetStockCharSize(Font,InCh,Width,Height);
+#else
 	Width = 0;
 	Height = 0;
 	INT Ch    = (TCHARU)InCh;
@@ -318,6 +534,7 @@ static inline void GetCharSize( UFont* Font, TCHAR InCh, INT& Width, INT& Height
 		Width = Char.USize;
 		Height = Char.VSize;
 	}
+#endif
 	unguardSlow;
 }
 

@@ -1,0 +1,27 @@
+; UT99 Android v2.0.3 - Russian localization for Unreal Tournament v400
+; Generated against the original v400 localization schema. UTF-8 source;
+; Android Core converts .rut text to Windows-1251 at load time.
+
+[LevelInfo0]
+Title="Обучение штурму"
+IdealPlayerCount="2-4"
+
+[FortStandard3]
+FortName="Башня танка"
+
+[FortStandard2]
+FortName="Ворота ангара"
+DestroyedMessage="открыты!"
+
+[FortStandard1]
+FortName="Запал"
+DestroyedMessage="подожжён!"
+
+[LevelSummary]
+Title="Обучение штурму"
+IdealPlayerCount="2-4"
+
+[AssaultInfo0]
+ObjDesc[0]="Выстрелите по запалу, чтобы поджечь его и взорвать стену пещеры. Это откроет доступ к подземной базе."
+ObjDesc[1]="Пройдите через базу, разбираясь со всеми пушками и врагами на пути, затем поднимитесь на лифте к платформе с переключателем ворот ангара."
+ObjDesc[2]="Как только ворота откроются, уничтожьте прототип танка, стреляя в башню."

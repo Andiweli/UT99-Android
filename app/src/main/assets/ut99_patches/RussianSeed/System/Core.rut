@@ -1,0 +1,11 @@
+﻿; UT99 Android v2.0.2 Russian compatibility seed
+; UTF-8 source; Android Core converts .rut to CP1251 at load time.
+[Language]
+Language=Русский
+
+[General]
+True=Да
+False=Нет
+None=Нет
+Yes=Да
+No=Нет
