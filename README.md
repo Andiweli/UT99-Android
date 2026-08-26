@@ -34,11 +34,11 @@
 
 ---
 
-<p align="center">
-<a href="https://ibb.co/7xN7Ddcr"><img src="https://i.ibb.co/wZrDqFHp/screen-A.png" alt="screen-A" border="0" width="320" height="180"></a>
-<a href="https://ibb.co/DHHZ8PVy"><img src="https://i.ibb.co/fzzsnV15/screen-C.png" alt="screen-C" border="0" width="320" height="180"></a>
-<a href="https://ibb.co/b5LxSxxw"><img src="https://i.ibb.co/chtPGPPf/screen-B.png" alt="screen-B" border="0" width="320" height="180"></a>
-</p>
+## ▣ Screenshots
+
+<img width="1920" height="1080" alt="ut99-0" src="https://github.com/user-attachments/assets/e7b74300-e685-47fb-82f8-4a81405855e2" />
+<img width="1920" height="1080" alt="ut99-1" src="https://github.com/user-attachments/assets/81ffadd5-bf30-4444-ab3b-698c4e56430f" />
+<img width="1920" height="1080" alt="ut99-2" src="https://github.com/user-attachments/assets/516263cf-caba-44e3-95f4-4b0852e79780" />
 
 ---
 
