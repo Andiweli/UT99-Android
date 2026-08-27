@@ -151,16 +151,36 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         if (viewHeight <= 0) {
             viewHeight = nDeviceHeight;
         }
-        mUT99TouchWidth = Math.max(1.0f, (float)Math.max(width, Math.max(viewWidth, nDeviceWidth)));
-        mUT99TouchHeight = Math.max(1.0f, (float)Math.max(height, Math.max(viewHeight, nDeviceHeight)));
+        // UT99_ANDROID_AAOS_TOUCH_SAFE_AREA_FIX:
+        // MotionEvent.getX()/getY() are local to this SurfaceView. On Android
+        // Automotive, getRealMetrics() includes vehicle-owned system-bar areas
+        // that are deliberately outside the app window. Using the physical
+        // display size there therefore shifts/scales menu touch coordinates.
+        // Normalize AAOS touch against the actual visible SurfaceView instead.
+        // Keep the established max(surface/view/device) behavior everywhere
+        // else so phone/tablet/Retroid/OUYA input remains unchanged.
+        boolean ut99Automotive = false;
+        try {
+            ut99Automotive = getContext().getPackageManager().hasSystemFeature("android.hardware.type.automotive");
+        } catch (Throwable ignored) {
+        }
+
+        if (ut99Automotive) {
+            mUT99TouchWidth = Math.max(1.0f, (float)viewWidth);
+            mUT99TouchHeight = Math.max(1.0f, (float)viewHeight);
+        } else {
+            mUT99TouchWidth = Math.max(1.0f, (float)Math.max(width, Math.max(viewWidth, nDeviceWidth)));
+            mUT99TouchHeight = Math.max(1.0f, (float)Math.max(height, Math.max(viewHeight, nDeviceHeight)));
+        }
         mUT99TouchLogCount = 0;
 
         Log.v("SDL", "Window size: " + width + "x" + height);
         Log.v("SDL", "Device size: " + nDeviceWidth + "x" + nDeviceHeight);
-        Log.i("UT99SDL", "UT99_ANDROID_V74_TOUCH_NATIVE_SCALE_FIX surface=" + width + "x" + height
+        Log.i("UT99SDL", "UT99_ANDROID_AAOS_TOUCH_SAFE_AREA_FIX surface=" + width + "x" + height
                 + " view=" + viewWidth + "x" + viewHeight
                 + " device=" + nDeviceWidth + "x" + nDeviceHeight
-                + " touchNorm=" + (int)mUT99TouchWidth + "x" + (int)mUT99TouchHeight);
+                + " touchNorm=" + (int)mUT99TouchWidth + "x" + (int)mUT99TouchHeight
+                + " automotive=" + ut99Automotive);
         SDLActivity.nativeSetScreenResolution(width, height, nDeviceWidth, nDeviceHeight, mDisplay.getRefreshRate());
         SDLActivity.onNativeResize();
 

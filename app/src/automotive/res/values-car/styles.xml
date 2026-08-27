@@ -1,0 +1,15 @@
+<resources>
+    <!--
+        Android Automotive OS keeps vehicle/system controls in OEM-owned system bars.
+        Use a non-fullscreen theme in car mode so UT99 renders in the safe app area.
+        The regular values/styles.xml remains unchanged for phones, handhelds and OUYA.
+    -->
+    <style name="AppTheme" parent="android:style/Theme.NoTitleBar">
+        <item name="android:windowNoTitle">true</item>
+        <item name="android:windowActionBar">false</item>
+        <item name="android:windowFullscreen">false</item>
+        <item name="android:windowContentOverlay">@null</item>
+        <item name="android:windowDisablePreview">true</item>
+        <item name="android:colorAccent">#ff6600</item>
+    </style>
+</resources>

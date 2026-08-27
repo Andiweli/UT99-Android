@@ -106,6 +106,14 @@ public class GameActivity extends SDLActivity {
     private boolean legacySafeMode;
     private Ut99TouchOverlayViewV91 ut99TouchOverlayViewV91;
 
+    private boolean isAutomotiveDevice() {
+        try {
+            return getPackageManager().hasSystemFeature("android.hardware.type.automotive");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private File resolveDataRootForGame() {
         String fromIntent = getIntent() != null ? getIntent().getStringExtra(UT99Paths.EXTRA_DATA_ROOT) : null;
         if (fromIntent != null && fromIntent.length() > 0) {
@@ -305,6 +313,9 @@ public class GameActivity extends SDLActivity {
      * Android fullscreen/immersive mode for the SDL surface.
      */
     private void applyUt99ImmersiveMode() {
+        // AAOS owns persistent vehicle/system bars. Render inside the safe app area.
+        if (isAutomotiveDevice()) return;
+
         // UT99_ANDROID_IMMERSIVE_V28
         try {
             setRequestedOrientation(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE);
@@ -1082,6 +1093,7 @@ public class GameActivity extends SDLActivity {
 
     // UT99_ANDROID_V50_IMMERSIVE
     private void ut99V50Immersive() {
+        if (isAutomotiveDevice()) return;
         try {
             getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
@@ -1112,6 +1124,7 @@ public class GameActivity extends SDLActivity {
     private android.os.Handler ut99V52Handler;
 
     private void ut99V52HardImmersive() {
+        if (isAutomotiveDevice()) return;
         try {
             final android.view.Window w = getWindow();
             w.setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
@@ -1154,6 +1167,7 @@ public class GameActivity extends SDLActivity {
     }
 
     private void ut99V52ScheduleImmersive() {
+        if (isAutomotiveDevice()) return;
         if (ut99V52Handler == null) {
             ut99V52Handler = new android.os.Handler(android.os.Looper.getMainLooper());
         }
@@ -1181,10 +1195,63 @@ public class GameActivity extends SDLActivity {
 
 
 
+    // UT99_ANDROID_AAOS_LIFECYCLE_CLEANUP:
+    // Stop Java-side redraw/surface/fullscreen callbacks before SDL enters the
+    // background.  SDLActivity remains responsible for pausing the native game
+    // thread and audio.  Releasing the overlay first also prevents virtual
+    // buttons/axes from remaining latched when AAOS switches away from the game.
+    @Override
+    protected void onPause() {
+        if (isAutomotiveDevice()) {
+            try {
+                if (ut99TouchOverlayViewV91 != null) {
+                    ut99TouchOverlayViewV91.pauseForBackground();
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "AAOS lifecycle: touch overlay pause cleanup failed", t);
+            }
+
+            try {
+                if (ut99V52Handler != null) {
+                    ut99V52Handler.removeCallbacksAndMessages(null);
+                }
+                if (ut99V55Handler != null) {
+                    ut99V55Handler.removeCallbacksAndMessages(null);
+                }
+                Window w = getWindow();
+                View decor = w != null ? w.getDecorView() : null;
+                if (decor != null) {
+                    decor.setOnSystemUiVisibilityChangeListener(null);
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "AAOS lifecycle: pending UI callback cleanup failed", t);
+            }
+        }
+
+        super.onPause();
+    }
+
     @Override
     protected void onResume() {
-        ut99V55ScheduleFixedSurface(); // v55 onResume
-        super.onResume();
+        if (isAutomotiveDevice()) {
+            // Let SDL restore the native thread/audio/GL state first on AAOS.
+            super.onResume();
+
+            try {
+                if (ut99TouchOverlayViewV91 != null) {
+                    ut99TouchOverlayViewV91.resumeFromBackground();
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "AAOS lifecycle: touch overlay resume failed", t);
+            }
+
+            ut99V55ScheduleFixedSurface(); // v55 onResume
+        } else {
+            // Preserve the established phone/handheld/OUYA ordering.
+            ut99V55ScheduleFixedSurface(); // v55 onResume
+            super.onResume();
+        }
+
         ut99V52ScheduleImmersive(); // v52 onResume
         ut99V76HideImeUnlessRequested();
     }
@@ -1603,6 +1670,7 @@ public class GameActivity extends SDLActivity {
         private final android.graphics.Bitmap iconMenu;
         private long lastConfigReadMs, lastMenuReadMs, lastDebugReadMs;
         private boolean enabled = false, menuVisible = false, debugTouchMouseMenu = false;
+        private boolean redrawLoopRunning = false;
         private float leftBaseX, leftBaseY, rightBaseX, rightBaseY, rightLastX, rightLastY, lx, ly, rx, ry;
         private boolean fire, fireButton, altFire, jump, crouch, next, menu;
         private int rightFireAssistCount = 0;
@@ -1621,15 +1689,33 @@ public class GameActivity extends SDLActivity {
             iconCrouch = loadIcon("touch_overlay/crouch.png");
             iconNext = loadIcon("touch_overlay/next-weapon.png");
             iconMenu = loadIcon("touch_overlay/menu.png");
-            postDelayed(redrawRunnable, 66L);
+            resumeFromBackground();
         }
 
         private final Runnable redrawRunnable = new Runnable() {
             @Override public void run() {
+                if (!redrawLoopRunning) return;
                 invalidate();
                 postDelayed(this, 66L);
             }
         };
+
+        void pauseForBackground() {
+            redrawLoopRunning = false;
+            removeCallbacks(redrawRunnable);
+            // Release every Java-owned virtual input while the native SDL thread
+            // is still active, then forget all pointer ownership.
+            releaseAll();
+            roles.clear();
+        }
+
+        void resumeFromBackground() {
+            if (redrawLoopRunning) return;
+            redrawLoopRunning = true;
+            removeCallbacks(redrawRunnable);
+            invalidate();
+            postDelayed(redrawRunnable, 66L);
+        }
 
         private android.graphics.Bitmap loadIcon(String assetPath) {
             try {

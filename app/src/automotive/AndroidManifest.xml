@@ -1,0 +1,11 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- Dedicated Android Automotive OS flavor. -->
+    <uses-feature android:name="android.hardware.type.automotive" android:required="true" />
+
+    <!-- Do not make phone/tablet-specific hardware a requirement on AAOS. -->
+    <uses-feature android:name="android.hardware.screen.landscape" android:required="false" />
+    <uses-feature android:name="android.hardware.screen.portrait" android:required="false" />
+    <uses-feature android:name="android.hardware.wifi" android:required="false" />
+
+</manifest>

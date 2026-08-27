@@ -3,8 +3,40 @@ plugins {
 }
 
 android {
+    // Keep one Java/JNI namespace for both variants. The install package ID can still differ per flavor.
     namespace 'com.ast.ut99'
-    compileSdk 33
+    compileSdk 35
+
+    // NDK r23 is the last NDK release that supports Android Jelly Bean
+    // (API 16-18). Pin it explicitly so a newer locally installed NDK does
+    // not silently raise the native minimum to API 19/21 and break OUYA.
+    // arm64-v8a is automatically built with its architectural minimum API 21.
+    ndkVersion '23.2.8568313'
+
+    // AGP 8 disables BuildConfig generation by default; UT99 reads VERSION_NAME from it.
+    buildFeatures {
+        buildConfig true
+    }
+
+    flavorDimensions 'platform'
+    productFlavors {
+        // Default Android/OUYA build. minSdk 16 keeps Android 4.1.2 / OUYA compatibility.
+        normal {
+            dimension 'platform'
+            applicationId 'com.ast.ut99'
+            minSdk 16
+        }
+
+        // Dedicated Google Play / Android Automotive OS package.
+        automotive {
+            dimension 'platform'
+            applicationId 'com.ast.ut99android'
+            // The previous dedicated Automotive build already used API 21.
+            // Keeping this separate prevents the AAOS artifact from inheriting
+            // the Jelly Bean native baseline needed only by Normal/OUYA.
+            minSdk 21
+        }
+    }
 
     buildTypes {
         release {
@@ -14,13 +46,8 @@ android {
     }
 
     defaultConfig {
-        applicationId 'com.ast.ut99'
-        minSdk 16          // Android 4.1.2 / OUYA
-        // Android 15 warns about sideloaded apps targeting more than two API
-        // levels below the device. API 33 removes that warning on Android 15
-        // while minSdk 16 continues to preserve Android 4.1.2 / OUYA support.
-        targetSdk 33
-        versionCode 13
+        targetSdk 35
+        versionCode 14
         versionName '2.1.0'
 
         ndk {
@@ -31,14 +58,8 @@ android {
             cmake {
                 abiFilters 'armeabi-v7a', 'arm64-v8a'
                 cppFlags '-std=c++17 -fexceptions -frtti -fsigned-char -DANDROID -DPLATFORM_ANDROID'
-                // UT99_ANDROID_V78_OUYA_STATIC_STL_FIX:
-                // Android 4.1.2 / OUYA failed to resolve the transitive
-                // libc++_shared.so dependency while loading libut99dc_android_bridge.so.
-                // Link the small bridge and UE entry libraries against the static
-                // C++ runtime so no external libc++_shared.so is required at startup.
-                // ABI-neutral options only. ARMv7-specific compiler flags are
-                // selected inside CMakeLists.txt after CMake knows ANDROID_ABI;
-                // passing ANDROID_ARM_MODE to arm64-v8a aborts configuration.
+                // Android 4.1.2 / OUYA cannot reliably resolve a transitive libc++_shared.so.
+                // Link the bridge/entry libraries against the static C++ runtime instead.
                 arguments '-DANDROID_STL=c++_static'
             }
         }
@@ -46,8 +67,7 @@ android {
 
     sourceSets {
         main {
-            // fetch_deps.ps1 downloads SDL2 under the project root. Use rootProject.file()
-            // so the path remains correct regardless of Gradle's current project directory.
+            // fetch_deps.ps1 downloads SDL2 under the project root.
             java.srcDirs = [
                     'src/main/java',
                     rootProject.file('third_party/SDL2/android-project/app/src/main/java')
@@ -74,5 +94,27 @@ android {
             useLegacyPackaging true
         }
     }
+}
 
+// Android Studio should always default to the normal Android/OUYA build when using Run/Play.
+// The Automotive flavor is release-only because its intended artifact is an AAB.
+androidComponents {
+    beforeVariants(selector().all()) { variantBuilder ->
+        if (variantBuilder.name == 'automotiveDebug') {
+            variantBuilder.enable = false
+        }
+    }
+}
+
+// Convenience tasks with explicit artifact intent.
+tasks.register('buildNormalApk') {
+    group = 'build'
+    description = 'Builds the normal Android/OUYA debug APK.'
+    dependsOn 'assembleNormalDebug'
+}
+
+tasks.register('buildAutomotiveAab') {
+    group = 'build'
+    description = 'Builds the Android Automotive release AAB.'
+    dependsOn 'bundleAutomotiveRelease'
 }

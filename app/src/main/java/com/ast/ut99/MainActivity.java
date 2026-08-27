@@ -236,7 +236,18 @@ public class MainActivity extends Activity {
         return model.contains("ouya") || manufacturer.contains("ouya") || product.contains("ouya");
     }
 
+    private boolean isAutomotiveDevice() {
+        try {
+            return getPackageManager().hasSystemFeature("android.hardware.type.automotive");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
     private void hideSystemUi() {
+        // AAOS owns persistent vehicle/system bars. Do not force immersive mode there;
+        // keep the installer inside the safe application area supplied by the car.
+        if (isAutomotiveDevice()) return;
         Window window = getWindow();
         if (window == null) return;
         View decor = window.getDecorView();
