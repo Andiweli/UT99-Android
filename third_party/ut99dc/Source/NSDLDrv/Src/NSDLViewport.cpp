@@ -1560,10 +1560,36 @@ static void UT99V82QueueTextBytes( const char* Text )
 }
 
 static UBOOL GUT99AndroidMenuVisibleV91 = 0; // UT99_ANDROID_V91_TOUCH_OVERLAY
+static volatile INT GUT99RetroTouchInputResetSerial = 0; // RETROTOUCH_BETA4_INPUT_RESET_SYNC
+static volatile INT GUT99RetroTouchUiState = 0; // RETROTOUCH_BETA4_STATE_MACHINE_V2: 0 pass-through, 1 navigation, 2 gameplay
+
+static INT UT99RetroTouchDetermineUiState( UNSDLViewport* Viewport, UBOOL bMenu )
+{
+    if( bMenu )
+        return 1;
+
+    if( !Viewport || !Viewport->Actor || !Viewport->Actor->GetLevel() )
+        return 0;
+
+    // CityIntro is an interactive flyby: a normal screen tap must keep reaching
+    // SDL/UT so the player can skip it. Once UWindow opens, bMenu above switches
+    // the overlay to NAVIGATION. Every ordinary map is GAMEPLAY.
+    const TCHAR* MapName = *Viewport->Actor->GetLevel()->URL.Map;
+    if( MapName )
+    {
+        if( appStricmp(MapName,TEXT("CityIntro"))==0 || appStricmp(MapName,TEXT("CityIntro.unr"))==0 )
+            return 0;
+        if( appStricmp(MapName,TEXT("Entry"))==0 || appStricmp(MapName,TEXT("Entry.unr"))==0 )
+            return 0;
+    }
+
+    return 2;
+}
 
 static void UT99V47TickInput( UNSDLViewport* Viewport, UBOOL bMenu )
 {
     GUT99AndroidMenuVisibleV91 = bMenu ? 1 : 0;
+    GUT99RetroTouchUiState = UT99RetroTouchDetermineUiState( Viewport, bMenu );
     static UBOOL V72LoggedActive = 0;
     if( !Viewport )
         return;
@@ -1812,6 +1838,8 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidBu
 extern "C" JNIEXPORT jboolean JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidIsMenuV90(JNIEnv*, jclass) { return GUT99AndroidMenuVisibleV91 ? JNI_TRUE : JNI_FALSE; } // UT99_ANDROID_V92_TOUCH_OVERLAY compat
 extern "C" JNIEXPORT jboolean JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidIsMenuV91(JNIEnv*, jclass) { return GUT99AndroidMenuVisibleV91 ? JNI_TRUE : JNI_FALSE; } // UT99_ANDROID_V92_TOUCH_OVERLAY compat
 extern "C" JNIEXPORT jboolean JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidIsMenuV92(JNIEnv*, jclass) { return GUT99AndroidMenuVisibleV91 ? JNI_TRUE : JNI_FALSE; } // UT99_ANDROID_V92_TOUCH_OVERLAY
+extern "C" JNIEXPORT jint JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidTouchUiStateRT(JNIEnv*, jclass) { return (jint)GUT99RetroTouchUiState; } // RETROTOUCH_BETA4_STATE_MACHINE_V2
+extern "C" JNIEXPORT jint JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidInputResetSerialRT(JNIEnv*, jclass) { return (jint)GUT99RetroTouchInputResetSerial; } // RETROTOUCH_BETA4_INPUT_RESET_SYNC
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidAxisV47(JNIEnv*, jclass, jint axis, jfloat value) { UT99V47SetAndroidAxis((INT)axis, (FLOAT)value); }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidTouchLookV101(JNIEnv*, jclass, jfloat x, jfloat y)
 {
@@ -3185,19 +3213,17 @@ static void UT99AndroidOpenJoystickFallbacks()
     const int Count = SDL_NumJoysticks();
     for( int i = 0; i < Count && Slot < 8; ++i )
     {
+        // Game controllers are owned by GUT99AndroidControllers below.  The old
+        // code opened them here as well and leaked an extra SDL_GameController
+        // reference, which makes runtime remove/re-add handling unreliable.
         if( SDL_IsGameController( i ) )
+            continue;
+
+        SDL_Joystick* J = SDL_JoystickOpen( i );
+        if( J )
         {
-            SDL_GameController* C = SDL_GameControllerOpen( i );
-            if( C ) UT99_ANDROID_SDL_LOGI("opened gamecontroller %d: %s", i, SDL_GameControllerName(C));
-        }
-        else
-        {
-            SDL_Joystick* J = SDL_JoystickOpen( i );
-            if( J )
-            {
-                GUT99AndroidJoysticks[Slot++] = J;
-                UT99_ANDROID_SDL_LOGI("opened joystick %d: %s", i, SDL_JoystickName(J));
-            }
+            GUT99AndroidJoysticks[Slot++] = J;
+            UT99_ANDROID_SDL_LOGI("opened joystick %d: %s", i, SDL_JoystickName(J));
         }
     }
 }
@@ -3220,27 +3246,122 @@ static void UT99AndroidAdoptWindowSize( SDL_Window* Window, INT& X, INT& Y )
 #define UT99_ANDROID_CONTROLLER_BRIDGE_V26B 1
 static SDL_GameController* GUT99AndroidControllers[8] = { NULL };
 
-static void UT99AndroidOpenControllers()
+// UT99_ANDROID_RETROTOUCH_NATIVE_CONTROLLER_HOTPLUG_V2:
+// Android handhelds can disable and recreate their integrated gamepad while the
+// Activity and SDL window remain alive.  Java/SDL then emits a new controller
+// device, potentially with a different Android device id / SDL instance id.
+// UT99 used to open controllers only once from OpenWindow(), so the new device
+// never acquired a live SDL_GameController handle.
+static SDL_JoystickID UT99AndroidControllerInstanceId( SDL_GameController* Controller )
+{
+    if( !Controller )
+        return (SDL_JoystickID)-1;
+    SDL_Joystick* Joystick = SDL_GameControllerGetJoystick( Controller );
+    return Joystick ? SDL_JoystickInstanceID( Joystick ) : (SDL_JoystickID)-1;
+}
+
+static INT UT99AndroidFindControllerSlotByInstance( SDL_JoystickID InstanceId )
+{
+    for( INT i = 0; i < 8; ++i )
+    {
+        if( GUT99AndroidControllers[i] && UT99AndroidControllerInstanceId( GUT99AndroidControllers[i] ) == InstanceId )
+            return i;
+    }
+    return INDEX_NONE;
+}
+
+static INT UT99AndroidFindFreeControllerSlot()
+{
+    for( INT i = 0; i < 8; ++i )
+    {
+        if( !GUT99AndroidControllers[i] )
+            return i;
+        if( SDL_GameControllerGetAttached( GUT99AndroidControllers[i] ) == SDL_FALSE )
+        {
+            SDL_GameControllerClose( GUT99AndroidControllers[i] );
+            GUT99AndroidControllers[i] = NULL;
+            return i;
+        }
+    }
+    return INDEX_NONE;
+}
+
+static void UT99AndroidOpenControllerIndex( INT DeviceIndex, const char* Reason )
+{
+    if( DeviceIndex < 0 || DeviceIndex >= SDL_NumJoysticks() || !SDL_IsGameController( DeviceIndex ) )
+    {
+        UT99_ANDROID_SDL_LOGI( "controller hotplug open ignored index=%d reason=%s count=%d isgc=%d",
+            DeviceIndex, Reason ? Reason : "?", SDL_NumJoysticks(),
+            (DeviceIndex >= 0 && DeviceIndex < SDL_NumJoysticks()) ? (INT)SDL_IsGameController( DeviceIndex ) : 0 );
+        return;
+    }
+
+    const SDL_JoystickID InstanceId = SDL_JoystickGetDeviceInstanceID( DeviceIndex );
+    const INT ExistingSlot = UT99AndroidFindControllerSlotByInstance( InstanceId );
+    if( ExistingSlot != INDEX_NONE )
+    {
+        // SDL may deliver duplicate add notifications while Java settles device
+        // sources.  Never increase the controller refcount for the same instance.
+        if( SDL_GameControllerGetAttached( GUT99AndroidControllers[ExistingSlot] ) == SDL_TRUE )
+            return;
+        SDL_GameControllerClose( GUT99AndroidControllers[ExistingSlot] );
+        GUT99AndroidControllers[ExistingSlot] = NULL;
+    }
+
+    INT Slot = (ExistingSlot != INDEX_NONE) ? ExistingSlot : UT99AndroidFindFreeControllerSlot();
+    if( Slot == INDEX_NONE )
+    {
+        UT99_ANDROID_SDL_LOGI( "controller hotplug open failed: no free slot index=%d instance=%d reason=%s",
+            DeviceIndex, (INT)InstanceId, Reason ? Reason : "?" );
+        return;
+    }
+
+    SDL_GameController* Controller = SDL_GameControllerOpen( DeviceIndex );
+    if( !Controller )
+    {
+        UT99_ANDROID_SDL_LOGI( "controller hotplug SDL_GameControllerOpen failed index=%d instance=%d reason=%s err=%s",
+            DeviceIndex, (INT)InstanceId, Reason ? Reason : "?", SDL_GetError() );
+        return;
+    }
+
+    GUT99AndroidControllers[Slot] = Controller;
+    const char* ControllerName = SDL_GameControllerName( Controller );
+    if( ControllerName && strstr( ControllerName, "OUYA" ) )
+    {
+        GUT99V79OuyaLikeDevice = 1;
+        UT99_ANDROID_SDL_LOGI( "v79 OUYA controller profile active: %s", ControllerName );
+    }
+    UT99_ANDROID_SDL_LOGI( "opened gamecontroller index=%d slot=%d instance=%d reason=%s name=%s",
+        DeviceIndex, Slot, (INT)UT99AndroidControllerInstanceId( Controller ),
+        Reason ? Reason : "?", ControllerName ? ControllerName : "<unknown>" );
+}
+
+static void UT99AndroidCloseControllerInstance( SDL_JoystickID InstanceId, const char* Reason )
+{
+    const INT Slot = UT99AndroidFindControllerSlotByInstance( InstanceId );
+    if( Slot == INDEX_NONE )
+    {
+        UT99_ANDROID_SDL_LOGI( "controller hotplug remove instance=%d reason=%s handle=not-open",
+            (INT)InstanceId, Reason ? Reason : "?" );
+        return;
+    }
+
+    const char* Name = SDL_GameControllerName( GUT99AndroidControllers[Slot] );
+    UT99_ANDROID_SDL_LOGI( "closed gamecontroller slot=%d instance=%d reason=%s name=%s",
+        Slot, (INT)InstanceId, Reason ? Reason : "?", Name ? Name : "<unknown>" );
+    SDL_GameControllerClose( GUT99AndroidControllers[Slot] );
+    GUT99AndroidControllers[Slot] = NULL;
+}
+
+static void UT99AndroidOpenControllers( const char* Reason )
 {
     SDL_GameControllerEventState( SDL_ENABLE );
     SDL_JoystickEventState( SDL_ENABLE );
-    int Slot = 0;
     const int Count = SDL_NumJoysticks();
-    for( int i = 0; i < Count && Slot < 8; ++i )
+    for( int i = 0; i < Count; ++i )
     {
-        if( !SDL_IsGameController( i ) )
-            continue;
-        SDL_GameController* Controller = SDL_GameControllerOpen( i );
-        if( Controller )
-        {
-            const char* ControllerName = SDL_GameControllerName( Controller );
-            if( ControllerName && strstr( ControllerName, "OUYA" ) )
-            {
-                GUT99V79OuyaLikeDevice = 1;
-                UT99_ANDROID_SDL_LOGI( "v79 OUYA controller profile active: %s", ControllerName );
-            }
-            GUT99AndroidControllers[Slot++] = Controller;
-        }
+        if( SDL_IsGameController( i ) )
+            UT99AndroidOpenControllerIndex( i, Reason );
     }
 }
 
@@ -3754,7 +3875,7 @@ void UNSDLViewport::OpenWindow( DWORD InParentWindow, UBOOL Temporary, INT NewX,
         UT99_ANDROID_SDL_LOGI("OpenWindow adopted drawable/window size %dx%d", NewX, NewY);
 #endif
 #ifdef PLATFORM_ANDROID
-        UT99AndroidOpenControllers();
+        UT99AndroidOpenControllers( "startup" );
         UT99AndroidStopTextInput();
 #endif
 #ifdef PLATFORM_ANDROID
@@ -4189,7 +4310,17 @@ void UNSDLViewport::UpdateInput( UBOOL Reset )
 	guard(UNSDLViewport::UpdateInput);
 
 	if( Reset )
+	{
 		appMemset( (void*)JoyAxis, 0, sizeof(JoyAxis) );
+#ifdef PLATFORM_ANDROID
+        // RETROTOUCH_BETA4_INPUT_RESET_SYNC:
+        // UInput::ResetInput() reaches this method on respawn, map transitions,
+        // network player replacement and other engine-side input resets. Expose a
+        // monotonically increasing serial to Java so RetroTouch drops its pointer
+        // ownership/latches at the exact same boundary.
+        ++GUT99RetroTouchInputResetSerial;
+#endif
+	}
 
 	unguard;
 }
@@ -4440,6 +4571,27 @@ while( SDL_PollEvent( &Ev ) )
 #endif
 		switch( Ev.type )
 		{
+#ifdef PLATFORM_ANDROID
+            case SDL_CONTROLLERDEVICEADDED:
+            {
+                // For ADDED, cdevice.which is the current SDL joystick device
+                // index (not an instance id). Open it now so subsequent axis and
+                // button events are promoted to SDL_CONTROLLER* events for UT99.
+                UT99_ANDROID_SDL_LOGI( "controller hotplug SDL_CONTROLLERDEVICEADDED which=%d; rescanning all current controllers", (INT)Ev.cdevice.which );
+                UT99AndroidOpenControllers( "SDL_CONTROLLERDEVICEADDED" );
+                break;
+            }
+            case SDL_CONTROLLERDEVICEREMOVED:
+            {
+                // For REMOVED, cdevice.which is the SDL joystick instance id.
+                UT99AndroidCloseControllerInstance( (SDL_JoystickID)Ev.cdevice.which, "SDL_CONTROLLERDEVICEREMOVED" );
+                // A Retroid mode switch can replace one Android device with
+                // another almost immediately. Scan again after closing so a
+                // replacement that is already present is opened in this tick.
+                UT99AndroidOpenControllers( "post-remove-rescan" );
+                break;
+            }
+#endif
 			case SDL_QUIT:
 				// signal to client and remember set a flag just in case
 				QuitRequested = true;

@@ -237,23 +237,44 @@ class SDLJoystickHandler_API16 extends SDLJoystickHandler {
                     SDLControllerManager.nativeAddJoystick(joystick.device_id, joystick.name, joystick.desc,
                             getVendorId(joystickDevice), getProductId(joystickDevice), false,
                             getButtonMask(joystickDevice), joystick.axes.size(), getAxisMask(joystick.axes), joystick.hats.size()/2, 0);
+                    Log.i("SDLControllerManager", "UT99 hotplug add deviceId=" + joystick.device_id
+                            + " name=" + joystick.name);
                 }
             }
         }
 
-        /* Check removed devices */
+        /* Check removed or deactivated devices.
+         *
+         * UT99_ANDROID_RETROTOUCH_CONTROLLER_HOTPLUG_FIX:
+         * Some handhelds (notably Retroid) keep the same Android InputDevice ID
+         * when their integrated controller is switched off, but temporarily drop
+         * the GAMEPAD/JOYSTICK source bits. The stock SDL2 check below used to
+         * remove a joystick only when the numeric device ID vanished completely.
+         * That left a stale SDLJoystick in mJoysticks, so switching the controller
+         * back on with the same ID was ignored by getJoystick(device_id) and SDL
+         * never emitted a fresh controller-added event.
+         *
+         * Treat an existing ID that is no longer an SDL joystick as removed too.
+         * A later poll after reactivation will then add it cleanly again.
+         */
         ArrayList<Integer> removedDevices = null;
         for (SDLJoystick joystick : mJoysticks) {
             int device_id = joystick.device_id;
-            int i;
-            for (i = 0; i < deviceIds.length; i++) {
-                if (device_id == deviceIds[i]) break;
+            boolean stillPresent = false;
+            for (int i = 0; i < deviceIds.length; i++) {
+                if (device_id == deviceIds[i]) {
+                    stillPresent = true;
+                    break;
+                }
             }
-            if (i == deviceIds.length) {
+            boolean stillJoystick = stillPresent && SDLControllerManager.isDeviceSDLJoystick(device_id);
+            if (!stillJoystick) {
                 if (removedDevices == null) {
                     removedDevices = new ArrayList<Integer>();
                 }
                 removedDevices.add(device_id);
+                Log.i("SDLControllerManager", "UT99 hotplug remove/deactivate deviceId=" + device_id
+                        + " present=" + stillPresent + " joystick=" + stillJoystick);
             }
         }
 

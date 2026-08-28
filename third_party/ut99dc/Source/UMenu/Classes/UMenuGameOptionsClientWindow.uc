@@ -364,5 +364,5 @@ defaultproperties
 	TouchOverlayHelp="Shows the Android touch overlay for movement, looking, firing, jumping, crouching, weapon switching and menu access."
 	ControlOffset=20
 	bShowGoreControl=True
-	bTouchOverlay=False
+	bTouchOverlay=True
 }

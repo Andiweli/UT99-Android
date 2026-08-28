@@ -100,11 +100,12 @@ public class GameActivity extends SDLActivity {
     private static native boolean nativePrepareProcess(String dataRoot, String homeDir, String versionName);
     private static native void nativeAndroidTextV82(String text);
     private static native boolean nativeAndroidIsMenuV92(); // UT99_ANDROID_V92_TOUCH_OVERLAY
+    private static native int nativeAndroidTouchUiStateRT(); // RETROTOUCH_BETA4_STATE_MACHINE_V2
 
     private File dataRoot;
     private File homeDir;
     private boolean legacySafeMode;
-    private Ut99TouchOverlayViewV91 ut99TouchOverlayViewV91;
+    private Ut99RetroTouchBridge ut99RetroTouchBridge;
 
     private boolean isAutomotiveDevice() {
         try {
@@ -207,7 +208,7 @@ public class GameActivity extends SDLActivity {
         android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS active mode=" + ut99V166ResolutionMode);
         ut99V50Immersive(); // v50 onCreate
         applyUt99ImmersiveMode();
-        ut99V91InstallTouchOverlay();
+        ut99InstallRetroTouchBeta4();
     }
 
 
@@ -230,6 +231,14 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onDestroy() {
         final boolean finishing = isFinishing();
+        try {
+            if (ut99RetroTouchBridge != null) {
+                ut99RetroTouchBridge.destroy();
+                ut99RetroTouchBridge = null;
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "RetroTouch destroy cleanup failed", t);
+        }
         super.onDestroy();
 
         try {
@@ -982,6 +991,66 @@ public class GameActivity extends SDLActivity {
     private static native void nativeAndroidButtonV47(int keyCode, boolean down);
     private static native void nativeAndroidAxisV47(int axis, float value);
     private static native void nativeAndroidTouchLookV101(float x, float y);
+    private static native int nativeAndroidInputResetSerialRT();
+
+    // RetroTouch Beta 4 host bridge. Keep all game-specific mappings in Java and
+    // feed the same native controller/touch path already used by UT99.
+    void ut99RetroTouchButton(int keyCode, boolean down) {
+        nativeAndroidButtonV47(keyCode, down);
+    }
+
+    void ut99RetroTouchMove(float x, float y) {
+        nativeAndroidAxisV47(android.view.MotionEvent.AXIS_X, x);
+        nativeAndroidAxisV47(android.view.MotionEvent.AXIS_Y, y);
+    }
+
+    void ut99RetroTouchLook(float x, float y) {
+        nativeAndroidTouchLookV101(x, y);
+    }
+
+    boolean ut99RetroTouchMenuVisible() {
+        try {
+            return nativeAndroidIsMenuV92();
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    int ut99RetroTouchUiState() {
+        // Native state is authoritative because Java cannot reliably distinguish
+        // CityIntro/flyby from a live map merely from SDL Activity lifecycle state.
+        // 0 = pass-through/intro/loading, 1 = UWindow menu, 2 = live gameplay.
+        try {
+            return nativeAndroidTouchUiStateRT();
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    boolean ut99RetroTouchHasTouchscreen() {
+        // Retroid-class handhelds expose both a touchscreen and an integrated
+        // GAMEPAD/JOYSTICK. RetroTouch must remain available there. OUYA and
+        // non-touch ChromeOS/TV devices stay clean because they report no touch.
+        try {
+            if (isAutomotiveDevice()) return true;
+            android.content.pm.PackageManager pm = getPackageManager();
+            return pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN);
+        } catch (Throwable t) {
+            return true;
+        }
+    }
+
+    int ut99RetroTouchInputResetSerial() {
+        try {
+            return nativeAndroidInputResetSerialRT();
+        } catch (Throwable t) {
+            return 0;
+        }
+    }
+
+    boolean ut99RetroTouchPreferenceEnabled() {
+        return ut99V91ReadTouchOverlayEnabled();
+    }
 
     private static boolean isAndroidGamepadSourceV47(android.view.InputEvent event) {
         int source = event.getSource();
@@ -1030,6 +1099,9 @@ public class GameActivity extends SDLActivity {
             android.util.Log.i("UT99Android", "UT99_ANDROID_V72_ACTIVE GameActivity single START toggle path loaded");
         }
         if (isAndroidGamepadSourceV47(event) || isOuyaMenuKeyV79(keyCode) || textDeleteKey) {
+            if (ut99RetroTouchBridge != null && isAndroidGamepadSourceV47(event)) {
+                ut99RetroTouchBridge.onHardwareControllerInput();
+            }
             if (action == android.view.KeyEvent.ACTION_DOWN || action == android.view.KeyEvent.ACTION_UP) {
                 if (isOuyaDeviceV108()
                         && (keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
@@ -1059,6 +1131,9 @@ public class GameActivity extends SDLActivity {
     @Override
     public boolean onGenericMotionEvent(android.view.MotionEvent event) {
         if (isAndroidGamepadSourceV47(event) && event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
+            if (ut99RetroTouchBridge != null) {
+                ut99RetroTouchBridge.onHardwareControllerInput();
+            }
             final boolean ouya = isOuyaDeviceV108();
             float lx = event.getAxisValue(android.view.MotionEvent.AXIS_X);
             float ly = event.getAxisValue(android.view.MotionEvent.AXIS_Y);
@@ -1202,15 +1277,15 @@ public class GameActivity extends SDLActivity {
     // buttons/axes from remaining latched when AAOS switches away from the game.
     @Override
     protected void onPause() {
-        if (isAutomotiveDevice()) {
-            try {
-                if (ut99TouchOverlayViewV91 != null) {
-                    ut99TouchOverlayViewV91.pauseForBackground();
-                }
-            } catch (Throwable t) {
-                Log.w(TAG, "AAOS lifecycle: touch overlay pause cleanup failed", t);
+        try {
+            if (ut99RetroTouchBridge != null) {
+                ut99RetroTouchBridge.pause();
             }
+        } catch (Throwable t) {
+            Log.w(TAG, "RetroTouch pause cleanup failed", t);
+        }
 
+        if (isAutomotiveDevice()) {
             try {
                 if (ut99V52Handler != null) {
                     ut99V52Handler.removeCallbacksAndMessages(null);
@@ -1238,11 +1313,11 @@ public class GameActivity extends SDLActivity {
             super.onResume();
 
             try {
-                if (ut99TouchOverlayViewV91 != null) {
-                    ut99TouchOverlayViewV91.resumeFromBackground();
+                if (ut99RetroTouchBridge != null) {
+                    ut99RetroTouchBridge.start();
                 }
             } catch (Throwable t) {
-                Log.w(TAG, "AAOS lifecycle: touch overlay resume failed", t);
+                Log.w(TAG, "RetroTouch resume failed", t);
             }
 
             ut99V55ScheduleFixedSurface(); // v55 onResume
@@ -1250,6 +1325,13 @@ public class GameActivity extends SDLActivity {
             // Preserve the established phone/handheld/OUYA ordering.
             ut99V55ScheduleFixedSurface(); // v55 onResume
             super.onResume();
+            try {
+                if (ut99RetroTouchBridge != null) {
+                    ut99RetroTouchBridge.start();
+                }
+            } catch (Throwable t) {
+                Log.w(TAG, "RetroTouch resume failed", t);
+            }
         }
 
         ut99V52ScheduleImmersive(); // v52 onResume
@@ -1504,25 +1586,29 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
-        // v60: no low-res touch rescaling.  Touch/mouse events now stay in native
+        // RetroTouch must see the current native menu state before a fresh pointer
+        // is dispatched, otherwise the first UWindow tap after opening a menu can
+        // be consumed by a stale GAMEPLAY mode.
+        if (ut99RetroTouchBridge != null) {
+            ut99RetroTouchBridge.beforeHostTouch(ev);
+        }
+        // v60: no low-res touch rescaling. Touch/mouse events stay in native
         // SurfaceView coordinates so SDL and Unreal see the same drawable size.
         return super.dispatchTouchEvent(ev);
     }
 
 
-    // UT99_ANDROID_V91_TOUCH_OVERLAY
-    private void ut99V91InstallTouchOverlay() {
+    // RETROTOUCH_BETA4_UT99_INTEGRATION
+    private void ut99InstallRetroTouchBeta4() {
         try {
-            if (ut99TouchOverlayViewV91 != null) return;
+            if (ut99RetroTouchBridge != null) return;
             ut99V91EnsureTouchOverlayConfigDefault();
-            ut99TouchOverlayViewV91 = new Ut99TouchOverlayViewV91(this);
-            android.widget.FrameLayout.LayoutParams lp = new android.widget.FrameLayout.LayoutParams(
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT,
-                    android.widget.FrameLayout.LayoutParams.MATCH_PARENT);
-            addContentView(ut99TouchOverlayViewV91, lp);
-            Log.i(TAG, "UT99_ANDROID_V109_OUYA_IME_RETROID_TOUCH_REPAIR");
+            ut99V91MigrateLegacyTouchOverlayForRetroTouch();
+            ut99RetroTouchBridge = new Ut99RetroTouchBridge(this);
+            ut99RetroTouchBridge.attach();
+            Log.i(TAG, "RetroTouch 1.0.0-beta.4 installed over SDL gameplay view");
         } catch (Throwable t) {
-            Log.e(TAG, "v91 touch overlay install failed", t);
+            Log.e(TAG, "RetroTouch Beta 4 install failed", t);
         }
     }
 
@@ -1542,11 +1628,11 @@ public class GameActivity extends SDLActivity {
             if (text.indexOf("[UMenu.UMenuGameOptionsClientWindow]") < 0 && text.indexOf("bTouchOverlay=") < 0) {
                 java.io.FileWriter fw = new java.io.FileWriter(ini, true);
                 try {
-                    fw.write("\n; UT99_ANDROID_V96_TOUCH_OVERLAY default disabled on first install\n");
+                    fw.write("\n; RETROTOUCH_BETA4 default enabled on touch-only installs\n");
                     fw.write("[UMenu.UMenuGameOptionsClientWindow]\n");
-                    fw.write("bTouchOverlay=False\n");
+                    fw.write("bTouchOverlay=True\n");
                 } finally { fw.close(); }
-                Log.i(TAG, "v91 touch overlay default config appended to " + ini.getAbsolutePath());
+                Log.i(TAG, "RetroTouch default config appended to " + ini.getAbsolutePath());
             }
         } catch (Throwable t) { Log.w(TAG, "v91 could not ensure touch overlay config", t); }
     }
@@ -1561,19 +1647,118 @@ public class GameActivity extends SDLActivity {
         } finally { br.close(); }
     }
 
+    private void ut99V91MigrateLegacyTouchOverlayForRetroTouch() {
+        // RETROTOUCH_BETA4_STATE_MACHINE_V2:
+        // Older UT99 Android installs can legitimately contain bTouchOverlay=False
+        // because that flag belonged to the previous built-in overlay. Migrate it
+        // to enabled exactly once so an existing install immediately gets RetroTouch.
+        // After the marker is written, the Game Options checkbox is user-controlled
+        // again and future False/True changes are respected by the bridge.
+        try {
+            android.content.SharedPreferences prefs = getSharedPreferences(
+                    "ut99_retrotouch_migrations", MODE_PRIVATE);
+            final String marker = "beta4_state_machine_v2_enabled";
+            if (prefs.getBoolean(marker, false)) return;
+
+            java.io.File userIni = ut99V91UserIniFile();
+            java.io.File systemDir = userIni != null ? userIni.getParentFile() : null;
+            java.io.File[] files = new java.io.File[] {
+                    userIni,
+                    systemDir != null ? new java.io.File(systemDir, "UMenu.ini") : null,
+                    systemDir != null ? new java.io.File(systemDir, "AndroidUT99.ini") : null,
+                    systemDir != null ? new java.io.File(systemDir, "User.ini") : null
+            };
+
+            boolean found = false;
+            for (java.io.File file : files) {
+                if (file != null && file.exists()) {
+                    found |= ut99V91SetTouchOverlayFlagInFile(file, true);
+                }
+            }
+
+            if (!found && userIni != null) {
+                java.io.File parent = userIni.getParentFile();
+                if (parent != null && !parent.exists()) parent.mkdirs();
+                java.io.FileWriter fw = new java.io.FileWriter(userIni, true);
+                try {
+                    fw.write("\n; RETROTOUCH_BETA4_STATE_MACHINE_V2 legacy-overlay migration\n");
+                    fw.write("[UMenu.UMenuGameOptionsClientWindow]\n");
+                    fw.write("bTouchOverlay=True\n");
+                } finally {
+                    fw.close();
+                }
+            }
+
+            prefs.edit().putBoolean(marker, true).apply();
+            Log.i(TAG, "RetroTouch migrated legacy bTouchOverlay setting to enabled once");
+        } catch (Throwable t) {
+            Log.w(TAG, "RetroTouch legacy touch-overlay migration failed", t);
+        }
+    }
+
+    private boolean ut99V91SetTouchOverlayFlagInFile(java.io.File file, boolean enabled) {
+        try {
+            String text = ut99V91ReadSmallTextFile(file);
+            String[] lines = text.split("\n", -1);
+            StringBuilder out = new StringBuilder(text.length() + 16);
+            boolean found = false;
+            boolean changed = false;
+            String replacement = enabled ? "bTouchOverlay=True" : "bTouchOverlay=False";
+
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i];
+                String trimmed = line.trim();
+                if (trimmed.regionMatches(true, 0, "bTouchOverlay", 0, "bTouchOverlay".length())) {
+                    int eq = trimmed.indexOf('=');
+                    if (eq > 0 && trimmed.substring(0, eq).trim().equalsIgnoreCase("bTouchOverlay")) {
+                        found = true;
+                        if (!trimmed.equalsIgnoreCase(replacement)) changed = true;
+                        line = replacement;
+                    }
+                }
+                out.append(line);
+                if (i + 1 < lines.length) out.append('\n');
+            }
+
+            if (found && changed) {
+                java.io.FileWriter fw = new java.io.FileWriter(file, false);
+                try {
+                    fw.write(out.toString());
+                } finally {
+                    fw.close();
+                }
+            }
+            return found;
+        } catch (Throwable t) {
+            Log.w(TAG, "Could not migrate bTouchOverlay in " + file, t);
+            return false;
+        }
+    }
+
     private boolean ut99V91ReadTouchOverlayEnabled() {
         java.io.File userIni = ut99V91UserIniFile();
         java.io.File systemDir = userIni != null ? userIni.getParentFile() : null;
-        Boolean found = null;
-        if (userIni != null) found = ut99V96ReadTouchOverlayFlag(userIni, found);
+
+        // RETROTOUCH_BETA4_STATE_MACHINE_V2:
+        // UMenuGameOptionsClientWindow is a UMenu globalconfig class, so UMenu.ini
+        // is authoritative whenever it contains bTouchOverlay. AndroidUser.ini is
+        // the packaged/default fallback. This avoids a stale copy in another INI
+        // overriding a checkbox change made in Preferences > Game.
         if (systemDir != null) {
-            // v96: UMenu globalconfig may be saved outside AndroidUser.ini depending on the package build.
-            // Read these after AndroidUser.ini so the most recent UMenu save can override older defaults.
-            found = ut99V96ReadTouchOverlayFlag(new java.io.File(systemDir, "UMenu.ini"), found);
-            found = ut99V96ReadTouchOverlayFlag(new java.io.File(systemDir, "AndroidUT99.ini"), found);
-            found = ut99V96ReadTouchOverlayFlag(new java.io.File(systemDir, "User.ini"), found);
+            Boolean value = ut99V96ReadTouchOverlayFlag(new java.io.File(systemDir, "UMenu.ini"), null);
+            if (value != null) return value.booleanValue();
         }
-        return found != null ? found.booleanValue() : false;
+        if (userIni != null) {
+            Boolean value = ut99V96ReadTouchOverlayFlag(userIni, null);
+            if (value != null) return value.booleanValue();
+        }
+        if (systemDir != null) {
+            Boolean value = ut99V96ReadTouchOverlayFlag(new java.io.File(systemDir, "AndroidUT99.ini"), null);
+            if (value != null) return value.booleanValue();
+            value = ut99V96ReadTouchOverlayFlag(new java.io.File(systemDir, "User.ini"), null);
+            if (value != null) return value.booleanValue();
+        }
+        return true;
     }
 
     private Boolean ut99V96ReadTouchOverlayFlag(java.io.File ini, Boolean current) {
@@ -1605,459 +1790,6 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable t) { return current; }
     }
 
-    private static boolean ut99V122ParseIniBool(String value, boolean fallback) {
-        if (value == null) return fallback;
-        String v = value.trim();
-        if (v.equalsIgnoreCase("true") || v.equalsIgnoreCase("yes") || v.equalsIgnoreCase("on") || v.equals("1")) return true;
-        if (v.equalsIgnoreCase("false") || v.equalsIgnoreCase("no") || v.equalsIgnoreCase("off") || v.equals("0")) return false;
-        return fallback;
-    }
 
-    private boolean ut99V122ReadAndroidInputDebugFlag(String flagName) {
-        if (flagName == null || flagName.length() == 0) return false;
-        java.io.File userIni = ut99V91UserIniFile();
-        java.io.File systemDir = userIni != null ? userIni.getParentFile() : null;
-        java.io.File[] files = new java.io.File[] {
-                userIni,
-                systemDir != null ? new java.io.File(systemDir, "AndroidUT99.ini") : null,
-                systemDir != null ? new java.io.File(systemDir, "User.ini") : null,
-                systemDir != null ? new java.io.File(systemDir, "UMenu.ini") : null
-        };
-        Boolean enabled = null;
-        Boolean specific = null;
-        for (java.io.File ini : files) {
-            if (ini == null || !ini.exists()) continue;
-            try {
-                java.io.BufferedReader br = new java.io.BufferedReader(new java.io.FileReader(ini));
-                try {
-                    String line;
-                    boolean inSection = false;
-                    while ((line = br.readLine()) != null) {
-                        String t = line.trim();
-                        if (t.length() == 0 || t.startsWith(";") || t.startsWith("#")) continue;
-                        if (t.startsWith("[") && t.endsWith("]")) {
-                            inSection = t.equalsIgnoreCase("[AndroidInputDebug]");
-                            continue;
-                        }
-                        if (!inSection) continue;
-                        int eq = t.indexOf('=');
-                        if (eq <= 0) continue;
-                        String key = t.substring(0, eq).trim();
-                        String value = t.substring(eq + 1).trim();
-                        if (key.equalsIgnoreCase("Enable")) enabled = ut99V122ParseIniBool(value, false);
-                        if (key.equalsIgnoreCase(flagName)) specific = ut99V122ParseIniBool(value, false);
-                    }
-                } finally { br.close(); }
-            } catch (Throwable ignored) {
-            }
-        }
-        return Boolean.TRUE.equals(enabled) && Boolean.TRUE.equals(specific);
-    }
-
-    private static float ut99V91Clamp(float v, float lo, float hi) { return v < lo ? lo : (v > hi ? hi : v); }
-
-    private static final class Ut99TouchOverlayViewV91 extends View {
-        private final GameActivity activity;
-        private final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final android.graphics.Paint labelPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
-        private final android.graphics.RectF rect = new android.graphics.RectF();
-        private final android.util.SparseArray<TouchRole> roles = new android.util.SparseArray<TouchRole>();
-        private final android.graphics.Bitmap iconFire;
-        private final android.graphics.Bitmap iconAltFire;
-        private final android.graphics.Bitmap iconJump;
-        private final android.graphics.Bitmap iconCrouch;
-        private final android.graphics.Bitmap iconNext;
-        private final android.graphics.Bitmap iconMenu;
-        private long lastConfigReadMs, lastMenuReadMs, lastDebugReadMs;
-        private boolean enabled = false, menuVisible = false, debugTouchMouseMenu = false;
-        private boolean redrawLoopRunning = false;
-        private float leftBaseX, leftBaseY, rightBaseX, rightBaseY, rightLastX, rightLastY, lx, ly, rx, ry;
-        private boolean fire, fireButton, altFire, jump, crouch, next, menu;
-        private int rightFireAssistCount = 0;
-        private enum TouchRole { LEFT_STICK, RIGHT_LOOK, RIGHT_FIRE_ASSIST, FIRE, ALTFIRE, JUMP, CROUCH, NEXT, MENU }
-
-        Ut99TouchOverlayViewV91(GameActivity activity) {
-            super(activity);
-            this.activity = activity;
-            setWillNotDraw(false);
-            setFocusable(false);
-            labelPaint.setTextAlign(android.graphics.Paint.Align.CENTER);
-            labelPaint.setFakeBoldText(true);
-            iconFire = loadIcon("touch_overlay/fire.png");
-            iconAltFire = loadIcon("touch_overlay/alternate-fire.png");
-            iconJump = loadIcon("touch_overlay/jump.png");
-            iconCrouch = loadIcon("touch_overlay/crouch.png");
-            iconNext = loadIcon("touch_overlay/next-weapon.png");
-            iconMenu = loadIcon("touch_overlay/menu.png");
-            resumeFromBackground();
-        }
-
-        private final Runnable redrawRunnable = new Runnable() {
-            @Override public void run() {
-                if (!redrawLoopRunning) return;
-                invalidate();
-                postDelayed(this, 66L);
-            }
-        };
-
-        void pauseForBackground() {
-            redrawLoopRunning = false;
-            removeCallbacks(redrawRunnable);
-            // Release every Java-owned virtual input while the native SDL thread
-            // is still active, then forget all pointer ownership.
-            releaseAll();
-            roles.clear();
-        }
-
-        void resumeFromBackground() {
-            if (redrawLoopRunning) return;
-            redrawLoopRunning = true;
-            removeCallbacks(redrawRunnable);
-            invalidate();
-            postDelayed(redrawRunnable, 66L);
-        }
-
-        private android.graphics.Bitmap loadIcon(String assetPath) {
-            try {
-                java.io.InputStream in = activity.getAssets().open(assetPath);
-                try { return android.graphics.BitmapFactory.decodeStream(in); }
-                finally { in.close(); }
-            } catch (Throwable t) {
-                Log.w(TAG, "v91 touch overlay missing icon " + assetPath, t);
-                return null;
-            }
-        }
-
-        private void refreshState() { refreshState(false); }
-
-        private void refreshState(boolean forceMenuRead) {
-            long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastConfigReadMs > 900L) { lastConfigReadMs = now; enabled = activity.ut99V91ReadTouchOverlayEnabled(); }
-            if (forceMenuRead || now - lastMenuReadMs > 120L) {
-                lastMenuReadMs = now;
-                try { menuVisible = nativeAndroidIsMenuV92(); } catch (Throwable ignored) { menuVisible = false; }
-            }
-        }
-
-        private boolean debugTouchMouseMenu() {
-            long now = android.os.SystemClock.uptimeMillis();
-            if (now - lastDebugReadMs > 1000L) {
-                lastDebugReadMs = now;
-                debugTouchMouseMenu = activity.ut99V122ReadAndroidInputDebugFlag("LogTouchMouseMenu");
-            }
-            return debugTouchMouseMenu;
-        }
-
-        private String actionName(int action) {
-            switch (action) {
-                case android.view.MotionEvent.ACTION_DOWN: return "DOWN";
-                case android.view.MotionEvent.ACTION_UP: return "UP";
-                case android.view.MotionEvent.ACTION_MOVE: return "MOVE";
-                case android.view.MotionEvent.ACTION_CANCEL: return "CANCEL";
-                case android.view.MotionEvent.ACTION_POINTER_DOWN: return "POINTER_DOWN";
-                case android.view.MotionEvent.ACTION_POINTER_UP: return "POINTER_UP";
-                default: return String.valueOf(action);
-            }
-        }
-
-        private String sourceName(android.view.MotionEvent event) {
-            int source = event != null ? event.getSource() : 0;
-            if ((source & android.view.InputDevice.SOURCE_MOUSE) == android.view.InputDevice.SOURCE_MOUSE) return "direct-mouse";
-            if ((source & android.view.InputDevice.SOURCE_TOUCHSCREEN) == android.view.InputDevice.SOURCE_TOUCHSCREEN) return "direct-touch";
-            return "motion-source-" + source;
-        }
-
-        private boolean active() { return active(false); }
-
-        private boolean active(boolean forceMenuRead) { refreshState(forceMenuRead); return enabled && !menuVisible; }
-
-        @Override protected void onDraw(android.graphics.Canvas canvas) {
-            super.onDraw(canvas);
-            refreshState();
-            if (!enabled || menuVisible || canvas == null) return;
-            float w = getWidth(), h = getHeight();
-            if (w <= 0 || h <= 0) return;
-            float s = Math.min(w, h);
-            float pad = Math.max(10f, s * 0.020f);
-            float r = Math.max(50f, s * 0.0705f); // v96: restored larger v94-style buttons
-            float gap = Math.max(12f, s * 0.018f);
-
-            drawIconButton(canvas, pad + r * 0.72f, pad + r * 0.72f, r * 0.72f, iconMenu, null, true);
-            float actionY1 = h * 0.42f + r * 2.0f; // v96: right-side Fire/AltFire lower
-            float actionY2 = actionY1 + r * 2.0f + gap;
-            float nextY = actionY1 - r * 2.0f - gap;
-            drawIconButton(canvas, w - pad - r, nextY, r, iconNext, null, true);
-            drawIconButton(canvas, w - pad - r, actionY1, r, iconFire, null, true);
-            drawIconButton(canvas, w - pad - r, actionY2, r, iconAltFire, null, true);
-
-            float bottomY = h - pad - r;
-            float bottomShiftLeft = r; // v95: move Jump/Crouch half a button-width left
-            drawIconButton(canvas, w - pad - r - bottomShiftLeft, bottomY, r, iconCrouch, null, true);
-            drawIconButton(canvas, w - pad - r * 3.05f - gap - bottomShiftLeft, bottomY, r, iconJump, null, true);
-        }
-
-        private void drawIconButton(android.graphics.Canvas canvas, float cx, float cy, float r, android.graphics.Bitmap icon, String label, boolean round) {
-            paint.setStyle(android.graphics.Paint.Style.FILL);
-            paint.setColor(0x06202020); // v95: 50% more transparent than v94
-            if (round) {
-                canvas.drawCircle(cx, cy, r, paint);
-            } else {
-                canvas.drawCircle(cx, cy, r, paint);
-            }
-            paint.setStyle(android.graphics.Paint.Style.STROKE);
-            paint.setStrokeWidth(Math.max(2f, r * 0.055f));
-            paint.setColor(0x1AFFFFFF);
-            canvas.drawCircle(cx, cy, r, paint);
-            if (icon != null) {
-                float iconR = r * 0.64f;
-                rect.set(cx - iconR, cy - iconR, cx + iconR, cy + iconR);
-                paint.setStyle(android.graphics.Paint.Style.FILL);
-                paint.setAlpha(40);
-                canvas.drawBitmap(icon, null, rect, paint);
-                paint.setAlpha(255);
-            } else if (label != null && label.equals("NEXT")) {
-                labelPaint.setColor(0x33FFFFFF);
-                labelPaint.setTextSize(Math.max(17f, r * 0.43f));
-                android.graphics.Paint.FontMetrics fm = labelPaint.getFontMetrics();
-                canvas.drawText("NEXT", cx, cy - (fm.ascent + fm.descent) * 0.5f, labelPaint);
-            }
-            if (label != null && !label.equals("NEXT")) {
-                labelPaint.setColor(0x28FFFFFF);
-                labelPaint.setTextSize(Math.max(12f, r * 0.24f));
-                canvas.drawText(label, cx, cy + r + Math.max(12f, r * 0.32f), labelPaint);
-            }
-        }
-
-        private boolean hasActiveRightLookPointerV123() {
-            for (int i = 0; i < roles.size(); ++i) {
-                if (roles.valueAt(i) == TouchRole.RIGHT_LOOK) return true;
-            }
-            return false;
-        }
-
-        private TouchRole resolveTouchRoleV123(float x, float y) {
-            TouchRole role = hitRole(x, y);
-            // UT99_ANDROID_V123_RIGHT_TOUCH_FIRE_ASSIST:
-            // First free touch on the right half remains relative look/turn.
-            // A second free touch on the right half becomes Fire while the
-            // original look pointer keeps aiming. Explicit overlay buttons keep
-            // their old roles, and menus still pass through via active(true).
-            if (role == TouchRole.RIGHT_LOOK && x >= getWidth() * 0.5f && hasActiveRightLookPointerV123()) {
-                return TouchRole.RIGHT_FIRE_ASSIST;
-            }
-            return role;
-        }
-
-        private void syncFireV123() {
-            boolean wantFire = fireButton || rightFireAssistCount > 0;
-            if (fire != wantFire) {
-                fire = wantFire;
-                nativeAndroidButtonV47(105, wantFire);
-            }
-        }
-
-        private void setFireButtonV123(boolean down) {
-            if (fireButton != down) {
-                fireButton = down;
-                syncFireV123();
-            }
-        }
-
-        private void addRightFireAssistV123() {
-            rightFireAssistCount++;
-            syncFireV123();
-        }
-
-        private void removeRightFireAssistV123() {
-            if (rightFireAssistCount > 0) rightFireAssistCount--;
-            syncFireV123();
-        }
-
-        @Override public boolean onTouchEvent(android.view.MotionEvent event) {
-            if (event == null) return false;
-            int action = event.getActionMasked(), index = event.getActionIndex();
-            boolean debug = debugTouchMouseMenu();
-            int pointerId = (index >= 0 && index < event.getPointerCount()) ? event.getPointerId(index) : -1;
-            TouchRole existingRole = pointerId >= 0 ? roles.get(pointerId) : null;
-
-            if (action == android.view.MotionEvent.ACTION_DOWN || action == android.view.MotionEvent.ACTION_POINTER_DOWN) {
-                // UT99_ANDROID_V122_MENU_CLICK_PASSTHROUGH:
-                // The overlay is a fullscreen Java view above SDL.  Its cached
-                // menuVisible flag was enough to eat the first direct touch/mouse
-                // click right after UWindow opened; stick+ShoulderR never went
-                // through this Java view, which is why that path was reliable.
-                // Force a fresh native menu query for new pointers and do not
-                // consume direct menu clicks.  Already-owned gameplay pointers are
-                // still released normally below, so no virtual button can stick.
-                if (!active(true)) {
-                    releaseAll();
-                    roles.clear();
-                    if (debug) {
-                        Log.i("UT99_MENUCLICK", "UT99_ANDROID_V122 overlay pass-through action=" + actionName(action)
-                                + " source=" + sourceName(event)
-                                + " x=" + event.getX(index) + " y=" + event.getY(index)
-                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
-                    }
-                    return false;
-                }
-                TouchRole role = resolveTouchRoleV123(event.getX(index), event.getY(index));
-                roles.put(pointerId, role);
-                if (role == TouchRole.LEFT_STICK) { leftBaseX = event.getX(index); leftBaseY = event.getY(index); }
-                else if (role == TouchRole.RIGHT_LOOK) { rightBaseX = event.getX(index); rightBaseY = event.getY(index); rightLastX = rightBaseX; rightLastY = rightBaseY; }
-                if (role == TouchRole.RIGHT_FIRE_ASSIST) addRightFireAssistV123();
-                else updateRole(role, event.getX(index), event.getY(index), true);
-                if (debug) {
-                    Log.i("UT99_TOUCH", "UT99_ANDROID_V122 overlay consume action=" + actionName(action)
-                            + " source=" + sourceName(event)
-                            + " role=" + role
-                            + " x=" + event.getX(index) + " y=" + event.getY(index)
-                            + " enabled=" + enabled + " menuVisible=" + menuVisible);
-                }
-                return true;
-            }
-            if (action == android.view.MotionEvent.ACTION_MOVE) {
-                if (roles.size() == 0 && !active(true)) {
-                    if (debug) {
-                        Log.i("UT99_MENUCLICK", "UT99_ANDROID_V122 overlay motion pass-through source=" + sourceName(event)
-                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
-                    }
-                    return false;
-                }
-                for (int i = 0; i < event.getPointerCount(); ++i) {
-                    TouchRole role = roles.get(event.getPointerId(i));
-                    if (role != null && role != TouchRole.RIGHT_FIRE_ASSIST) updateRole(role, event.getX(i), event.getY(i), true);
-                }
-                return true;
-            }
-            if (action == android.view.MotionEvent.ACTION_CANCEL) { releaseAll(); roles.clear(); return true; }
-            if (action == android.view.MotionEvent.ACTION_UP || action == android.view.MotionEvent.ACTION_POINTER_UP) {
-                TouchRole role = existingRole;
-                if (role != null) {
-                    if (role == TouchRole.RIGHT_FIRE_ASSIST) removeRightFireAssistV123();
-                    else updateRole(role, event.getX(index), event.getY(index), false);
-                    roles.remove(pointerId);
-                    if (debug) {
-                        Log.i("UT99_TOUCH", "UT99_ANDROID_V122 overlay release action=" + actionName(action)
-                                + " source=" + sourceName(event)
-                                + " role=" + role
-                                + " x=" + event.getX(index) + " y=" + event.getY(index)
-                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
-                    }
-                    return true;
-                }
-                if (!active(true)) {
-                    if (debug) {
-                        Log.i("UT99_MENUCLICK", "UT99_ANDROID_V122 overlay up pass-through source=" + sourceName(event)
-                                + " enabled=" + enabled + " menuVisible=" + menuVisible);
-                    }
-                    return false;
-                }
-            }
-            return roles.size() > 0;
-        }
-
-        private TouchRole hitRole(float x, float y) {
-            float w = getWidth(), h = getHeight(), s = Math.min(w, h), pad = Math.max(10f, s * 0.020f), r = Math.max(50f, s * 0.0705f), gap = Math.max(12f, s * 0.018f);
-            if (insideCircle(x, y, pad + r * 0.72f, pad + r * 0.72f, r * 1.10f)) return TouchRole.MENU;
-            float actionY1 = h * 0.42f + r * 2.0f, actionY2 = actionY1 + r * 2.0f + gap, nextY = actionY1 - r * 2.0f - gap;
-            if (insideCircle(x, y, w - pad - r, nextY, r * 1.35f)) return TouchRole.NEXT;
-            if (insideCircle(x, y, w - pad - r, actionY1, r * 1.35f)) return TouchRole.FIRE;
-            if (insideCircle(x, y, w - pad - r, actionY2, r * 1.35f)) return TouchRole.ALTFIRE;
-            float bottomY = h - pad - r;
-            float bottomShiftLeft = r;
-            if (insideCircle(x, y, w - pad - r - bottomShiftLeft, bottomY, r * 1.35f)) return TouchRole.CROUCH;
-            if (insideCircle(x, y, w - pad - r * 3.05f - gap - bottomShiftLeft, bottomY, r * 1.35f)) return TouchRole.JUMP;
-            return x < w * 0.5f ? TouchRole.LEFT_STICK : TouchRole.RIGHT_LOOK;
-        }
-
-        private boolean insideCircle(float x, float y, float cx, float cy, float r) {
-            float dx = x - cx, dy = y - cy;
-            return dx * dx + dy * dy <= r * r;
-        }
-
-        private float analogValue(float delta, float radius, float dead, float scale) {
-            float v = ut99V91Clamp(delta / radius, -1f, 1f);
-            if (Math.abs(v) < dead) return 0f;
-            if (v > 0f) v = (v - dead) / (1f - dead);
-            else v = (v + dead) / (1f - dead);
-            return ut99V91Clamp(v * scale, -1f, 1f);
-        }
-
-        private float analogValueSoftLook(float delta, float radius, float dead, float scale) {
-            float v = ut99V91Clamp(delta / radius, -1f, 1f);
-            float sign = v < 0f ? -1f : 1f;
-            float a = Math.abs(v);
-            if (a < dead) return 0f;
-            a = (a - dead) / (1f - dead);
-            return ut99V91Clamp(sign * a * scale, -1f, 1f);
-        }
-
-        private float touchLookDeltaV106(float deltaPx, float gain) {
-            // UT99_ANDROID_V107_TOUCH_OVERLAY:
-            // Smartphone FPS aiming should be relative-drag based, like a mouse,
-            // not a virtual stick with a large centre deadzone.  Keep only a tiny
-            // jitter filter for touch noise and send proportional deltas to native.
-            if (Math.abs(deltaPx) < 0.25f) return 0f;
-            return ut99V91Clamp(deltaPx * gain, -1f, 1f);
-        }
-
-        private void updateRole(TouchRole role, float x, float y, boolean down) {
-            float s = Math.min(getWidth(), getHeight());
-            float moveRadius = Math.max(112f, s * 0.145f); // v96: stable left virtual stick
-            float lookRadius = Math.max(118f, s * 0.145f); // v102: keep horizontal precision from v101
-            switch (role) {
-                case LEFT_STICK:
-                    lx = down ? analogValue(x - leftBaseX, moveRadius, 0.075f, 0.74f) : 0f;
-                    ly = down ? analogValue(y - leftBaseY, moveRadius, 0.075f, 0.74f) : 0f;
-                    nativeAndroidAxisV47(android.view.MotionEvent.AXIS_X, lx);
-                    nativeAndroidAxisV47(android.view.MotionEvent.AXIS_Y, ly);
-                    break;
-                case RIGHT_LOOK:
-                    if (down) {
-                        float dx = x - rightLastX;
-                        float dy = y - rightLastY;
-                        rightLastX = x;
-                        rightLastY = y;
-                        rx = touchLookDeltaV106(dx, 0.0210f);
-                        ry = touchLookDeltaV106(dy, 0.0210f);
-                    } else {
-                        rx = ry = 0f;
-                    }
-                    nativeAndroidTouchLookV101(rx, ry);
-                    break;
-                case RIGHT_FIRE_ASSIST:
-                    break;
-                case FIRE:
-                    setFireButtonV123(down);
-                    break;
-                case ALTFIRE:
-                    if (altFire != down) { altFire = down; nativeAndroidButtonV47(104, down); }
-                    break;
-                case JUMP:
-                    if (jump != down) { jump = down; nativeAndroidButtonV47(96, down); }
-                    break;
-                case CROUCH:
-                    if (crouch != down) { crouch = down; nativeAndroidButtonV47(97, down); }
-                    break;
-                case NEXT:
-                    if (next != down) { next = down; nativeAndroidButtonV47(103, down); }
-                    break;
-                case MENU:
-                    if (menu != down) { menu = down; nativeAndroidButtonV47(82, down); }
-                    break;
-            }
-        }
-
-        private void releaseAll() {
-            if (lx != 0f || ly != 0f) { lx = ly = 0f; nativeAndroidAxisV47(android.view.MotionEvent.AXIS_X, 0f); nativeAndroidAxisV47(android.view.MotionEvent.AXIS_Y, 0f); }
-            if (rx != 0f || ry != 0f) { rx = ry = 0f; nativeAndroidTouchLookV101(0f, 0f); }
-            if (fire || fireButton || rightFireAssistCount > 0) { fire = false; fireButton = false; rightFireAssistCount = 0; nativeAndroidButtonV47(105, false); }
-            if (altFire) { altFire = false; nativeAndroidButtonV47(104, false); }
-            if (jump) { jump = false; nativeAndroidButtonV47(96, false); }
-            if (crouch) { crouch = false; nativeAndroidButtonV47(97, false); }
-            if (next) { next = false; nativeAndroidButtonV47(103, false); }
-            if (menu) { menu = false; nativeAndroidButtonV47(82, false); }
-        }
-    }
 
 }

@@ -47,8 +47,8 @@ android {
 
     defaultConfig {
         targetSdk 35
-        versionCode 14
-        versionName '2.1.0'
+        versionCode 15
+        versionName '2.2.0'
 
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
@@ -117,4 +117,9 @@ tasks.register('buildAutomotiveAab') {
     group = 'build'
     description = 'Builds the Android Automotive release AAB.'
     dependsOn 'bundleAutomotiveRelease'
+}
+
+
+dependencies {
+    implementation files('libs/retrotouch.aar')
 }
