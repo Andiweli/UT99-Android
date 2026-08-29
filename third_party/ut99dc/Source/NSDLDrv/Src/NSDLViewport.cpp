@@ -4671,22 +4671,6 @@ UBOOL UNSDLViewport::TickInput()
 #ifdef PLATFORM_ANDROID
         UT99V47TickInput( this, bShowWindowsMouse );
         AndroidUpdateNativeMouseCaptureV113( bShowWindowsMouse ); // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
-        // UT99_ANDROID_CHROMEOS_MOUSE_DIAG_V216:
-        // A low-rate breadcrumb distinguishes missing Android hover delivery
-        // from SDL/native capture or Unreal input-state failures.
-        static DOUBLE GUT99V216LastMouseDiag = 0.0;
-        const DOUBLE GUT99V216Now = appSeconds();
-        if( GUT99V216Now - GUT99V216LastMouseDiag > 1.0 )
-        {
-            GUT99V216LastMouseDiag = GUT99V216Now;
-            UT99_ANDROID_SDL_LOGI( "UT99MouseDiag V216 Tick menu=%d seen=%d capture=%d relative=%d mousefocus=%d grab=%d",
-                bShowWindowsMouse ? 1 : 0,
-                GUT99V113NativeMouseSeen ? 1 : 0,
-                GUT99V113NativeMouseCaptureActive ? 1 : 0,
-                SDL_GetRelativeMouseMode() ? 1 : 0,
-                SDL_GetMouseFocus() == hWnd ? 1 : 0,
-                hWnd && SDL_GetWindowGrab( hWnd ) ? 1 : 0 );
-        }
         if( bShowWindowsMouse )
         {
             // UT99_ANDROID_V81_CURSOR_MODE_SWITCH:

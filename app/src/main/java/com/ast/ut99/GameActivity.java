@@ -37,10 +37,6 @@ public class GameActivity extends SDLActivity {
     private static volatile boolean sUt99ImeWanted;
     private static boolean sUt99V72LoggedActive = false;
     private int ut99V212LastDesktopInputReason = Integer.MIN_VALUE;
-    private int ut99V216MouseDiagCount;
-    private int ut99V218MouseMapLogCount;
-    private android.os.Handler ut99V217DiagHandler;
-    private java.lang.Runnable ut99V217DiagPoll;
 
     public static void ut99SetImeWanted(boolean wanted) {
         sUt99ImeWanted = wanted;
@@ -224,42 +220,7 @@ public class GameActivity extends SDLActivity {
         android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS active mode=" + ut99V166ResolutionMode);
         ut99V50Immersive(); // v50 onCreate
         applyUt99ImmersiveMode();
-        if (ut99IsChromeOSV211()) {
-            Ut99MouseDiagnostics.init(this);
-            Ut99MouseDiagnostics.log("ACTIVITY", "GameActivity created; SDL content="
-                    + (SDLActivity.getContentView() != null
-                    ? SDLActivity.getContentView().getClass().getName() : "null"));
-            Toast.makeText(this, "Mouse diagnostic: "
-                    + Ut99MouseDiagnostics.getDisplayLocation(), Toast.LENGTH_LONG).show();
-        }
         ut99InstallRetroTouchBeta4();
-        ut99V217StartMouseDiagnostics();
-    }
-
-    private void ut99V217StartMouseDiagnostics() {
-        if (!ut99IsChromeOSV211()) return;
-        ut99V217DiagHandler = new android.os.Handler(android.os.Looper.getMainLooper());
-        ut99V217DiagPoll = new java.lang.Runnable() {
-            @Override public void run() {
-                try {
-                    android.view.View content = SDLActivity.getContentView();
-                    int uiState;
-                    try {
-                        uiState = nativeAndroidTouchUiStateRT();
-                    } catch (Throwable ignored) {
-                        uiState = -1;
-                    }
-                    Ut99MouseDiagnostics.logPointerCapture(
-                            "POLL uiState=" + uiState, content, false);
-                } catch (Throwable t) {
-                    Ut99MouseDiagnostics.log("POLL", "failed: " + t);
-                }
-                if (ut99V217DiagHandler != null) {
-                    ut99V217DiagHandler.postDelayed(this, 1000L);
-                }
-            }
-        };
-        ut99V217DiagHandler.post(ut99V217DiagPoll);
     }
 
 
@@ -282,11 +243,6 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onDestroy() {
         final boolean finishing = isFinishing();
-        if (ut99V217DiagHandler != null) {
-            ut99V217DiagHandler.removeCallbacksAndMessages(null);
-            ut99V217DiagHandler = null;
-            ut99V217DiagPoll = null;
-        }
         try {
             if (ut99RetroTouchBridge != null) {
                 ut99RetroTouchBridge.destroy();
@@ -295,8 +251,6 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable t) {
             Log.w(TAG, "RetroTouch destroy cleanup failed", t);
         }
-        Ut99MouseDiagnostics.log("ACTIVITY", "GameActivity destroying");
-        Ut99MouseDiagnostics.close();
         super.onDestroy();
 
         try {
@@ -1325,18 +1279,6 @@ public class GameActivity extends SDLActivity {
         return y;
     }
 
-    private void ut99LogChromeOSMouseMapV218(float rawX, float rawY,
-                                             float mappedX, float mappedY,
-                                             int action) {
-        if (ut99V218MouseMapLogCount >= 48) return;
-        if (Math.abs(rawX - mappedX) <= 0.01f
-                && Math.abs(rawY - mappedY) <= 0.01f) return;
-        ut99V218MouseMapLogCount++;
-        Ut99MouseDiagnostics.log("CHROMEOS_MAP_V218",
-                "action=" + action + " raw=" + rawX + "," + rawY
-                        + " mapped=" + mappedX + "," + mappedY);
-    }
-
     @android.annotation.TargetApi(26)
     private static final class Ut99Api26View {
         private Ut99Api26View() {}
@@ -1429,21 +1371,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
-        if (ut99IsChromeOSV211()) {
-            Ut99MouseDiagnostics.logMotion("GameActivity.dispatchGeneric",
-                    event, SDLActivity.getContentView());
-        }
-        if (ut99IsChromeOSV211() && event != null && ut99V216MouseDiagCount < 48) {
-            android.view.InputDevice device = event.getDevice();
-            String deviceName = device != null ? device.getName() : "null";
-            int tool = event.getPointerCount() > 0 ? event.getToolType(0) : -1;
-            Log.i("UT99MouseDiag", "V216 GameActivity.dispatchGeneric action="
-                    + event.getActionMasked() + " source=0x"
-                    + Integer.toHexString(event.getSource()) + " tool=" + tool
-                    + " device=" + deviceName + " capture="
-                    + ut99HasPointerCaptureV210());
-            ut99V216MouseDiagCount++;
-        }
         // UT99_ANDROID_CHROMEOS_MOUSE_ACTIVITY_ROUTE_V210:
         // ChromeOS may deliver mouse hover, capture and button events to the
         // Activity/DecorView instead of the SDL Surface's generic-motion
@@ -1474,11 +1401,8 @@ public class GameActivity extends SDLActivity {
                             y = relativeY;
                         }
                     } else {
-                        final float rawX = x;
-                        final float rawY = y;
                         x = ut99MapChromeOSAbsoluteMouseXV218(x);
                         y = ut99MapChromeOSAbsoluteMouseYV218(y);
-                        ut99LogChromeOSMouseMapV218(rawX, rawY, x, y, action);
                     }
                     SDLActivity.onNativeMouse(0, action, x, y, relative);
                     return true;
@@ -1499,8 +1423,6 @@ public class GameActivity extends SDLActivity {
                             ? rawX : ut99MapChromeOSAbsoluteMouseXV218(rawX);
                     final float mappedY = relative
                             ? rawY : ut99MapChromeOSAbsoluteMouseYV218(rawY);
-                    ut99LogChromeOSMouseMapV218(
-                            rawX, rawY, mappedX, mappedY, action);
                     SDLActivity.onNativeMouse(event.getButtonState(), nativeAction,
                             mappedX, mappedY, relative);
                     return true;
@@ -1977,10 +1899,6 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
-        if (ut99IsChromeOSV211()) {
-            Ut99MouseDiagnostics.logMotion("GameActivity.dispatchTouch",
-                    ev, SDLActivity.getContentView());
-        }
         // RetroTouch must see the current native menu state before a fresh pointer
         // is dispatched, otherwise the first UWindow tap after opening a menu can
         // be consumed by a stale GAMEPLAY mode.
@@ -2007,7 +1925,6 @@ public class GameActivity extends SDLActivity {
             // a RetroTouch target, therefore do not add the overlay View at all.
             if (ut99IsChromeOSV211()) {
                 Log.i(TAG, "UT99_ANDROID_CHROMEOS_NO_OVERLAY_VIEW_V215 skipped RetroTouch attachment");
-                Ut99MouseDiagnostics.log("RETROTOUCH", "attachment skipped on ChromeOS");
                 return;
             }
             ut99V91EnsureTouchOverlayConfigDefault();

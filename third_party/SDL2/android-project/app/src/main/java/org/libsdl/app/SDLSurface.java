@@ -1,7 +1,5 @@
 package org.libsdl.app;
 
-import com.ast.ut99.Ut99MouseDiagnostics;
-
 import android.content.Context;
 import android.content.pm.ActivityInfo;
 import android.hardware.Sensor;
@@ -46,8 +44,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // finger position maps to the same visible point after Android upscales the
     // buffer to fullscreen.
     protected float mUT99TouchWidth, mUT99TouchHeight;
-    protected int mUT99TouchLogCount;
-    protected int mUT99V216MouseDiagCount;
 
     // Is SurfaceView ready for rendering
     public boolean mIsSurfaceReady;
@@ -73,8 +69,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         mHeight = 1.0f;
         mUT99TouchWidth = 1.0f;
         mUT99TouchHeight = 1.0f;
-        mUT99TouchLogCount = 0;
-        mUT99V216MouseDiagCount = 0;
 
         mIsSurfaceReady = false;
     }
@@ -175,8 +169,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             mUT99TouchWidth = Math.max(1.0f, (float)Math.max(width, Math.max(viewWidth, nDeviceWidth)));
             mUT99TouchHeight = Math.max(1.0f, (float)Math.max(height, Math.max(viewHeight, nDeviceHeight)));
         }
-        mUT99TouchLogCount = 0;
-
         Log.v("SDL", "Window size: " + width + "x" + height);
         Log.v("SDL", "Device size: " + nDeviceWidth + "x" + nDeviceHeight);
         Log.i("UT99SDL", "UT99_ANDROID_AAOS_TOUCH_SAFE_AREA_FIX surface=" + width + "x" + height
@@ -275,7 +267,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // Touch events
     @Override
     public boolean onTouch(View v, MotionEvent event) {
-        Ut99MouseDiagnostics.logMotion("SDLSurface.onTouch", event, this);
         /* Ref: http://developer.android.com/training/gestures/multi.html */
         int touchDevId = event.getDeviceId();
         final int pointerCount = event.getPointerCount();
@@ -349,10 +340,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
 
             final boolean relativeMouse = motionListener.inRelativeMode();
 
-            float ut99MouseRawX = x;
-            float ut99MouseRawY = y;
-            boolean ut99MouseScaled = false;
-
             boolean ut99ChromeOSV218 = false;
             try {
                 ut99ChromeOSV218 = getContext().getPackageManager().hasSystemFeature(
@@ -375,8 +362,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
                 // actually uses (also correct for ARC window/fullscreen changes).
                 x = ut99MapChromeOSAbsoluteMouseXV218(x);
                 y = ut99MapChromeOSAbsoluteMouseYV218(y);
-                ut99MouseScaled = Math.abs(x - ut99MouseRawX) > 0.01f
-                        || Math.abs(y - ut99MouseRawY) > 0.01f;
             } else if (!relativeMouse && action != MotionEvent.ACTION_SCROLL
                     && mWidth > 1.0f && mHeight > 1.0f
                     && mUT99TouchWidth > 1.0f && mUT99TouchHeight > 1.0f
@@ -387,18 +372,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
                 if (y < 0.0f) { y = 0.0f; }
                 if (x > mWidth - 1.0f) { x = mWidth - 1.0f; }
                 if (y > mHeight - 1.0f) { y = mHeight - 1.0f; }
-                ut99MouseScaled = true;
-            }
-
-            if (!relativeMouse && mUT99TouchLogCount < 32) {
-                Log.i("UT99SDL", "UT99_ANDROID_V79_OUYA_MOUSE_NATIVE_SCALE_FIX raw="
-                        + ut99MouseRawX + "," + ut99MouseRawY
-                        + " -> " + x + "," + y
-                        + " surface=" + (int)mWidth + "x" + (int)mHeight
-                        + " norm=" + (int)mUT99TouchWidth + "x" + (int)mUT99TouchHeight
-                        + " scaled=" + ut99MouseScaled
-                        + " action=" + action + " buttons=" + mouseButton);
-                mUT99TouchLogCount++;
             }
 
             SDLActivity.onNativeMouse(mouseButton, action, x, y, relativeMouse);
@@ -474,20 +447,11 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         // that listener explicitly so menu hover and the first gameplay motion
         // reach Android_OnMouse.
         if (event != null) {
-            Ut99MouseDiagnostics.logMotion("SDLSurface.onHoverEvent", event, this);
-            if (mUT99V216MouseDiagCount < 48) {
-                Log.i("UT99MouseDiag", "V216 SDLSurface.onHoverEvent action="
-                        + event.getActionMasked() + " source=0x"
-                        + Integer.toHexString(event.getSource()) + " x="
-                        + event.getX(0) + " y=" + event.getY(0));
-                mUT99V216MouseDiagCount++;
-            }
             try {
                 if (SDLActivity.getMotionListener().onGenericMotion(this, event)) {
                     return true;
                 }
-            } catch (Throwable t) {
-                Log.w("UT99MouseDiag", "V216 hover forwarding failed", t);
+            } catch (Throwable ignored) {
             }
         }
         return super.onHoverEvent(event);
@@ -560,14 +524,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // Captured pointer events for API 26.
     public boolean onCapturedPointerEvent(MotionEvent event)
     {
-        Ut99MouseDiagnostics.logMotion("SDLSurface.onCapturedPointerEvent", event, this);
-        if (mUT99V216MouseDiagCount < 48) {
-            Log.i("UT99MouseDiag", "V216 SDLSurface.onCapturedPointerEvent action="
-                    + event.getActionMasked() + " source=0x"
-                    + Integer.toHexString(event.getSource()) + " x="
-                    + event.getX(0) + " y=" + event.getY(0));
-            mUT99V216MouseDiagCount++;
-        }
         int action = event.getActionMasked();
 
         float x, y;
@@ -609,7 +565,5 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     @Override
     public void onPointerCaptureChange(boolean hasCapture) {
         super.onPointerCaptureChange(hasCapture);
-        Ut99MouseDiagnostics.logPointerCapture(
-                "SDLSurface.onPointerCaptureChange", this, hasCapture);
     }
 }

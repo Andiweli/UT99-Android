@@ -1,6 +1,5 @@
 package org.libsdl.app;
 
-import com.ast.ut99.Ut99MouseDiagnostics;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -675,7 +674,6 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
 
     @Override
     public boolean onGenericMotion(View v, MotionEvent event) {
-        Ut99MouseDiagnostics.logMotion("SDL Motion API12", event, v);
         float x, y;
         int action;
 
@@ -700,11 +698,8 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
                 case MotionEvent.ACTION_MOVE:
                     x = event.getX(0);
                     y = event.getY(0);
-                    final float ut99V116RawXApi12 = x;
-                    final float ut99V116RawYApi12 = y;
                     x = ut99V116ScaleMouseX(x);
                     y = ut99V116ScaleMouseY(y);
-                    ut99V116LogHoverScale(ut99V116RawXApi12, ut99V116RawYApi12, x, y, action);
 
                     SDLActivity.onNativeMouse(0, action, x, y, false);
                     return true;
@@ -757,23 +752,6 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
         return y;
     }
 
-    protected void ut99V116LogHoverScale(float rawX, float rawY, float x, float y, int action) {
-        // UT99_ANDROID_NATIVE_MOUSE_HOVER_SCALE_V116
-        try {
-            SDLSurface surface = SDLActivity.mSurface;
-            if (surface != null && surface.mUT99TouchLogCount < 48) {
-                Log.i("UT99SDL", "UT99_ANDROID_NATIVE_MOUSE_HOVER_SCALE_V116 raw="
-                        + rawX + "," + rawY
-                        + " -> " + x + "," + y
-                        + " surface=" + (int)surface.mWidth + "x" + (int)surface.mHeight
-                        + " norm=" + (int)surface.mUT99TouchWidth + "x" + (int)surface.mUT99TouchHeight
-                        + " action=" + action);
-                surface.mUT99TouchLogCount++;
-            }
-        } catch (Throwable ignored) {
-        }
-    }
-
     public boolean supportsRelativeMouse() {
         return false;
     }
@@ -808,8 +786,6 @@ class SDLGenericMotionListener_API24 extends SDLGenericMotionListener_API12 {
 
     @Override
     public boolean onGenericMotion(View v, MotionEvent event) {
-        Ut99MouseDiagnostics.logMotion("SDL Motion API24", event, v);
-
         // Handle relative mouse mode
         if (mRelativeModeEnabled) {
             if (ut99V214IsMouseLike(event)) {
@@ -873,7 +849,6 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
 
     @Override
     public boolean onGenericMotion(View v, MotionEvent event) {
-        Ut99MouseDiagnostics.logMotion("SDL Motion API26", event, v);
         float x, y;
         int action;
 
@@ -906,11 +881,8 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
                     } else {
                         x = event.getX(0);
                         y = event.getY(0);
-                        final float ut99V116RawXApi26 = x;
-                        final float ut99V116RawYApi26 = y;
                         x = ut99V116ScaleMouseX(x);
                         y = ut99V116ScaleMouseY(y);
-                        ut99V116LogHoverScale(ut99V116RawXApi26, ut99V116RawYApi26, x, y, action);
                     }
                     SDLActivity.onNativeMouse(0, action, x, y, relative);
                     return true;
@@ -936,8 +908,6 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
 
     @Override
     public boolean setRelativeMouseEnabled(boolean enabled) {
-        Ut99MouseDiagnostics.logPointerCapture(
-                "SDL Motion API26 setRelative before", SDLActivity.getContentView(), enabled);
         if (!SDLActivity.isDeXMode() || Build.VERSION.SDK_INT >= 27 /* Android 8.1 (O_MR1) */) {
             if (enabled) {
                 SDLActivity.getContentView().requestPointerCapture();
@@ -945,12 +915,8 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
                 SDLActivity.getContentView().releasePointerCapture();
             }
             mRelativeModeEnabled = enabled;
-            Ut99MouseDiagnostics.logPointerCapture(
-                    "SDL Motion API26 setRelative after", SDLActivity.getContentView(), enabled);
             return true;
         } else {
-            Ut99MouseDiagnostics.log("SDL Motion API26 setRelative",
-                    "unsupported due DeX/API guard");
             return false;
         }
     }
@@ -958,13 +924,9 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
     @Override
     public void reclaimRelativeMouseModeIfNeeded()
     {
-        Ut99MouseDiagnostics.logPointerCapture(
-                "SDL Motion API26 reclaim before", SDLActivity.getContentView(), mRelativeModeEnabled);
         if (mRelativeModeEnabled && !SDLActivity.isDeXMode()) {
             SDLActivity.getContentView().requestPointerCapture();
         }
-        Ut99MouseDiagnostics.logPointerCapture(
-                "SDL Motion API26 reclaim after", SDLActivity.getContentView(), mRelativeModeEnabled);
     }
 
     @Override
