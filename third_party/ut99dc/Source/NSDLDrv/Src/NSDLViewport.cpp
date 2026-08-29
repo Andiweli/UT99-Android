@@ -302,10 +302,63 @@ static void UT99AndroidCallJavaResolutionModeV166( const FString& Mode )
     Env->DeleteLocalRef( ActivityClass );
 }
 
+static UBOOL UT99AndroidUseAsyncResolutionCommitV219()
+{
+    JNIEnv* Env = (JNIEnv*)SDL_AndroidGetJNIEnv();
+    if( !Env )
+        return 0;
+
+    jclass ActivityClass = Env->FindClass( "com/ast/ut99/GameActivity" );
+    if( !ActivityClass )
+    {
+        Env->ExceptionClear();
+        return 0;
+    }
+
+    UBOOL Result = 0;
+    jmethodID Method = Env->GetStaticMethodID( ActivityClass,
+        "ut99UseAsyncResolutionCommitV219", "()Z" );
+    if( Method )
+    {
+        Result = Env->CallStaticBooleanMethod( ActivityClass, Method ) ? 1 : 0;
+        if( Env->ExceptionCheck() )
+        {
+            Env->ExceptionClear();
+            Result = 0;
+        }
+    }
+    else
+    {
+        Env->ExceptionClear();
+    }
+    Env->DeleteLocalRef( ActivityClass );
+    return Result;
+}
+
 static void UT99AndroidResolutionModeLabelV166( const FString& Mode, FOutputDevice& Ar )
 {
     FString Normalized = UT99AndroidNormalizeResolutionModeV166( *Mode );
     Ar.Log( *Normalized );
+}
+
+// UT99_ANDROID_ASYNC_RESOLUTION_COMMIT_V219:
+// SurfaceHolder.setFixedSize()/setSizeFromLayout() is asynchronous. The old
+// SetRes path called MakeFullscreen immediately after posting the Java change,
+// so handhelds frequently kept the previous Unreal viewport size while Android
+// had already switched to the new render buffer. Commit only after SDL reports
+// the requested drawable size on the game thread.
+static INT    GUT99AndroidPendingResolutionXV219 = 0;
+static INT    GUT99AndroidPendingResolutionYV219 = 0;
+static DOUBLE GUT99AndroidPendingResolutionSinceV219 = 0.0;
+static DOUBLE GUT99AndroidPendingResolutionLastLogV219 = 0.0;
+
+static void UT99AndroidQueueResolutionCommitV219( INT X, INT Y )
+{
+    GUT99AndroidPendingResolutionXV219 = X;
+    GUT99AndroidPendingResolutionYV219 = Y;
+    GUT99AndroidPendingResolutionSinceV219 = appSeconds();
+    GUT99AndroidPendingResolutionLastLogV219 = 0.0;
+    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_ASYNC_RESOLUTION_COMMIT_V219 queued target=%dx%d", X, Y );
 }
 #endif
 
@@ -567,9 +620,10 @@ static DOUBLE GUT99V111LastSuppressTouchLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_
 static UBOOL GUT99V113NativeMouseSeen = 0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
 static UBOOL GUT99V113NativeMouseCaptureActive = 0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
 static DOUBLE GUT99V113LastRelativeMotionLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
-static DOUBLE GUT99V114RelativeIgnoreUntil = 0.0; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
-static INT GUT99V114RelativeWarmupEvents = 0; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
-static DOUBLE GUT99V114LastDroppedRelativeLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
+// UT99_ANDROID_CHROMEOS_MOUSE_FRAMEPACED_FLOAT_V210
+// Parallel SDL Android event carrying 20.12 fixed-point relative mouse motion.
+static const INT GUT99AndroidHighResMouseMagicV210 = (INT)0x554D3231;
+static const FLOAT GUT99AndroidHighResMouseInvScaleV210 = 1.0f / 4096.0f;
 static DOUBLE GUT99V115LastNativeMouseActivity = 0.0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 static UBOOL GUT99V115MenuButtonDownValid[8] = {0,0,0,0,0,0,0,0}; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 static INT GUT99V115MenuButtonDownX[8] = {0,0,0,0,0,0,0,0}; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
@@ -777,6 +831,23 @@ static UObject* UT99AndroidFocusedEditBoxObjectV83()
             continue;
         if( !UT99AndroidGetBoolPropertyV79( Obj, TEXT("bCanEdit"), 1 ) )
             continue;
+
+        // UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218:
+        // Closed UWindow pages can retain bHasKeyboardFocus. The old global
+        // iterator could therefore select a hidden NameEditBox while the live
+        // Mouse Sensitivity UWindowEditBox was focused on another page.
+        UFunction* VisibleFn = Obj->FindFunction( FName(TEXT("WindowIsVisible"), FNAME_Find) );
+        if( VisibleFn )
+        {
+            struct FVisibleParms
+            {
+                DWORD ReturnValue;
+            } VisibleParms;
+            VisibleParms.ReturnValue = 0;
+            Obj->ProcessEvent( VisibleFn, &VisibleParms );
+            if( !VisibleParms.ReturnValue )
+                continue;
+        }
         return Obj;
     }
     return NULL;
@@ -883,14 +954,22 @@ static void UT99AndroidShowKeyboardForClickedEditV110( SDL_Window* Window, INT X
     const UBOOL bLikelyEditClickV169K = UT99AndroidLikelyEditFieldClickV112( X, Y );
     const UBOOL bStartUTNameEditV169K = UT99AndroidFocusedEditBoxClassContainsV169K( TEXT("NameEditBox") )
         && X >= 90 && X <= 760 && Y >= 135 && Y <= 345;
-    const UBOOL bEditClickV170B = bExactEditTargetV170B || bLikelyEditClickV169K || bStartUTNameEditV169K;
+    // UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218:
+    // A native mouse already went through UWindow's own hit-test before this
+    // function is called. A visible focused EditBox is therefore authoritative
+    // and avoids the old fixed X<=980 heuristic, which excluded the right-side
+    // Mouse Sensitivity control on wide Chromebook displays.
+    const UBOOL bNativeMouseFocusedEditV218 = Source && strstr( Source, "native-mouse" )
+        && bFocusedEditV170B;
+    const UBOOL bEditClickV170B = bExactEditTargetV170B || bLikelyEditClickV169K
+        || bStartUTNameEditV169K || bNativeMouseFocusedEditV218;
 
     if( bFocusedEditV170B && bEditClickV170B )
     {
         GUT99V112PendingKeyboardUntil = 0.0;
         GUT99V170BPendingKeyboardFromEditTarget = 0;
         UT99AndroidShowSoftKeyboardV44( Window, X, Y );
-        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME showed keyboard source=%s x=%d y=%d exact=%d namebox=%d ouya=%d", Source ? Source : "menu", X, Y, bExactEditTargetV170B ? 1 : 0, bStartUTNameEditV169K ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
+        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V218_EXACT_EDIT_TARGET_IME showed keyboard source=%s x=%d y=%d exact=%d nativeFocused=%d namebox=%d ouya=%d", Source ? Source : "menu", X, Y, bExactEditTargetV170B ? 1 : 0, bNativeMouseFocusedEditV218 ? 1 : 0, bStartUTNameEditV169K ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
     }
     else if( bEditClickV170B )
     {
@@ -927,6 +1006,23 @@ static UBOOL UT99AndroidInsertFocusedEditBoxCharV83( BYTE C )
     if( !EditObj )
         return 0;
 
+    // UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218:
+    // UWindowEditControl selects its whole value on focus. Calling Insert()
+    // directly skipped UWindowEditBox.KeyType(), so a four-character value
+    // such as "3.00" remained selected and every replacement digit exceeded
+    // MaxLength=4. Mirror the relevant KeyType rules before direct insertion.
+    const UBOOL bNumericOnly = UT99AndroidGetBoolPropertyV79( EditObj, TEXT("bNumericOnly"), 0 );
+    const UBOOL bNumericFloat = UT99AndroidGetBoolPropertyV79( EditObj, TEXT("bNumericFloat"), 0 );
+    if( bNumericOnly && !( (C >= '0' && C <= '9') || (C == '.' && bNumericFloat) ) )
+        return 1;
+
+    if( UT99AndroidGetBoolPropertyV79( EditObj, TEXT("bAllSelected"), 0 ) )
+    {
+        UFunction* ClearFn = EditObj->FindFunction( FName(TEXT("Clear"), FNAME_Find) );
+        if( ClearFn )
+            EditObj->ProcessEvent( ClearFn, NULL );
+    }
+
     UFunction* InsertFn = EditObj->FindFunction( TEXT("Insert") );
     if( !InsertFn )
         return 0;
@@ -940,7 +1036,12 @@ static UBOOL UT99AndroidInsertFocusedEditBoxCharV83( BYTE C )
     Parms.ReturnValue = 0;
 
     EditObj->ProcessEvent( InsertFn, &Parms );
-    return Parms.ReturnValue ? 1 : 0;
+    // A focused edit box owns the printable key even when MaxLength rejects it;
+    // never fall through and route that key as a menu/game action as well.
+    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218 class=%s char=%d inserted=%d numeric=%d float=%d",
+        EditObj->GetClass() ? TCHAR_TO_ANSI(EditObj->GetClass()->GetName()) : "?",
+        (INT)C, Parms.ReturnValue ? 1 : 0, bNumericOnly ? 1 : 0, bNumericFloat ? 1 : 0 );
+    return 1;
 }
 #endif
 
@@ -3495,8 +3596,13 @@ void UNSDLViewport::InitKeyMap()
 	KeyMap[SDL_SCANCODE_PAGEUP] = IK_PageUp;
 	KeyMap[SDL_SCANCODE_PAGEDOWN] = IK_PageDown;
 	KeyMap[SDL_SCANCODE_PRINTSCREEN] = IK_PrintScrn;
+	KeyMap[SDL_SCANCODE_PAUSE] = IK_Pause;
+	KeyMap[SDL_SCANCODE_NUMLOCKCLEAR] = IK_NumLock;
+	KeyMap[SDL_SCANCODE_SCROLLLOCK] = IK_ScrollLock;
 	KeyMap[SDL_SCANCODE_EQUALS] = IK_Equals;
+	KeyMap[SDL_SCANCODE_MINUS] = IK_Minus;
 	KeyMap[SDL_SCANCODE_SEMICOLON] = IK_Semicolon;
+	KeyMap[SDL_SCANCODE_APOSTROPHE] = IK_SingleQuote;
 	KeyMap[SDL_SCANCODE_BACKSLASH] = IK_Backslash;
 	KeyMap[SDL_SCANCODE_SLASH] = IK_Slash;
 	KeyMap[SDL_SCANCODE_LEFTBRACKET] = IK_LeftBracket;
@@ -3510,6 +3616,13 @@ void UNSDLViewport::InitKeyMap()
 	KeyMap[SDL_SCANCODE_0] = IK_0;
 	KeyMap[SDL_SCANCODE_KP_0] = IK_NumPad0;
 	KeyMap[SDL_SCANCODE_KP_PERIOD] = IK_NumPadPeriod;
+	KeyMap[SDL_SCANCODE_KP_ENTER] = IK_Enter;
+	KeyMap[SDL_SCANCODE_KP_MULTIPLY] = IK_GreyStar;
+	KeyMap[SDL_SCANCODE_KP_PLUS] = IK_GreyPlus;
+	KeyMap[SDL_SCANCODE_KP_COMMA] = IK_Separator;
+	KeyMap[SDL_SCANCODE_KP_MINUS] = IK_GreyMinus;
+	KeyMap[SDL_SCANCODE_KP_DIVIDE] = IK_GreySlash;
+	KeyMap[SDL_SCANCODE_KP_EQUALS] = IK_Equals;
 
 	INIT_KEY_RANGE( SDL_SCANCODE_1,    SDL_SCANCODE_9,    IK_1,       IK_9 );
 	INIT_KEY_RANGE( SDL_SCANCODE_A,    SDL_SCANCODE_Z,    IK_A,       IK_Z );
@@ -4381,11 +4494,18 @@ void UNSDLViewport::AndroidUpdateNativeMouseCaptureV113( UBOOL bMenuMode )
 			GUT99V111NativeMouseHadLast = 0;
 			for( INT i=0; i<8; ++i ) GUT99V115MenuButtonDownValid[i] = 0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 			UT99AndroidMarkNativeMouseActivityV111(); // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
-			GUT99V114RelativeIgnoreUntil = appSeconds() + 0.35; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
-			GUT99V114RelativeWarmupEvents = 5; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
-			SDL_GetRelativeMouseState( NULL, NULL ); // flush capture/warp residue where SDL supports it
-			GUT99V113NativeMouseCaptureActive = 1;
-			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115 enabled result=%d viewport=%dx%d", RelResult, SizeX, SizeY );
+			// UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214:
+			// Do not claim capture when Android/ChromeOS rejected it. Leaving the
+			// flag clear keeps the existing absolute-delta gameplay fallback alive
+			// and lets later ticks retry after the Surface gains focus.
+			GUT99V113NativeMouseCaptureActive =
+				( RelResult == 0 && SDL_GetRelativeMouseMode() ) ? 1 : 0;
+			if( !GUT99V113NativeMouseCaptureActive )
+			{
+				SDL_SetWindowGrab( hWnd, SDL_FALSE );
+				SDL_ShowCursor( SDL_ENABLE );
+			}
+			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214 enabled result=%d active=%d viewport=%dx%d", RelResult, GUT99V113NativeMouseCaptureActive ? 1 : 0, SizeX, SizeY );
 		}
 		else
 		{
@@ -4395,8 +4515,6 @@ void UNSDLViewport::AndroidUpdateNativeMouseCaptureV113( UBOOL bMenuMode )
 			SDL_ShowCursor( SDL_ENABLE );
 			GUT99V111NativeMouseHadLast = 0;
 			for( INT i=0; i<8; ++i ) GUT99V115MenuButtonDownValid[i] = 0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
-			GUT99V114RelativeIgnoreUntil = 0.0; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
-			GUT99V114RelativeWarmupEvents = 0; // UT99_ANDROID_NATIVE_MOUSE_STABLE_V114
 			GUT99V113NativeMouseCaptureActive = 0;
 			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115 disabled menu=%d viewport=%dx%d", bMenuMode ? 1 : 0, SizeX, SizeY );
 		}
@@ -4425,6 +4543,82 @@ UBOOL UNSDLViewport::TickInput()
 	INT Tmp;
 	const FLOAT CurTime = appSeconds();
 	const FLOAT DeltaTime = CurTime - InputUpdateTime;
+
+#ifdef PLATFORM_ANDROID
+    if( GUT99AndroidPendingResolutionXV219 > 0
+     && GUT99AndroidPendingResolutionYV219 > 0
+     && hWnd )
+    {
+        INT DrawableX = 0;
+        INT DrawableY = 0;
+        SDL_GL_GetDrawableSize( hWnd, &DrawableX, &DrawableY );
+        if( DrawableX <= 0 || DrawableY <= 0 )
+            SDL_GetWindowSize( hWnd, &DrawableX, &DrawableY );
+
+        const INT TargetX = GUT99AndroidPendingResolutionXV219;
+        const INT TargetY = GUT99AndroidPendingResolutionYV219;
+        if( Abs(DrawableX - TargetX) <= 2 && Abs(DrawableY - TargetY) <= 2 )
+        {
+            const INT OldSizeX = Max( 1, SizeX );
+            const INT OldSizeY = Max( 1, SizeY );
+            const FLOAT OldMouseX = WindowsMouseX;
+            const FLOAT OldMouseY = WindowsMouseY;
+
+            // Clear before SetClientSize() so any SDL size event produced by
+            // the commit cannot run this block recursively on the next tick.
+            GUT99AndroidPendingResolutionXV219 = 0;
+            GUT99AndroidPendingResolutionYV219 = 0;
+            GUT99AndroidPendingResolutionSinceV219 = 0.0;
+
+            // Android already owns the fullscreen Surface. Only synchronize
+            // Unreal's viewport/profile with the now-valid render buffer; do
+            // not toggle fullscreen a second time.
+            SetClientSize( TargetX, TargetY, false );
+            Client->FullscreenViewportX = SizeX;
+            Client->FullscreenViewportY = SizeY;
+            Client->SaveConfig();
+
+            WindowsMouseX = Clamp( OldMouseX * (FLOAT)SizeX / (FLOAT)OldSizeX,
+                0.0f, (FLOAT)Max( 1, SizeX - 1 ) );
+            WindowsMouseY = Clamp( OldMouseY * (FLOAT)SizeY / (FLOAT)OldSizeY,
+                0.0f, (FLOAT)Max( 1, SizeY - 1 ) );
+            UT99AndroidSetWindowConsoleMouseV91( WindowsMouseX, WindowsMouseY );
+
+            // Drop coordinates and press ownership from the former resolution.
+            GUT99V111NativeMouseHadLast = 0;
+            GUT99AndroidTouchMouseHadLastV32 = 0;
+            GUT99AndroidTouchMouseDownV32 = 0;
+            GUT99AndroidMenuTouchActiveV169B = 0;
+            GUT99AndroidMenuTouchButtonHeldV169B = 0;
+            GUT99AndroidRecentFingerMouseUntilV169C = 0.0;
+
+            UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_ASYNC_RESOLUTION_COMMIT_V219 committed drawable=%dx%d viewport=%dx%d mouse=%.1f,%.1f",
+                DrawableX, DrawableY, SizeX, SizeY, WindowsMouseX, WindowsMouseY );
+        }
+        else
+        {
+            const DOUBLE NowV219 = appSeconds();
+            if( NowV219 - GUT99AndroidPendingResolutionLastLogV219 > 0.75 )
+            {
+                GUT99AndroidPendingResolutionLastLogV219 = NowV219;
+                UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_ASYNC_RESOLUTION_COMMIT_V219 waiting target=%dx%d drawable=%dx%d age=%.2f",
+                    TargetX, TargetY, DrawableX, DrawableY,
+                    NowV219 - GUT99AndroidPendingResolutionSinceV219 );
+            }
+        }
+    }
+#endif
+
+#ifdef PLATFORM_ANDROID
+	// Aggregate physical relative motion once per input tick. SDL's ordinary
+	// integer stream remains the fallback for non-ChromeOS Android mice.
+	FLOAT AndroidPhysicalMouseHiResX = 0.0f;
+	FLOAT AndroidPhysicalMouseHiResY = 0.0f;
+	INT AndroidPhysicalMouseFallbackX = 0;
+	INT AndroidPhysicalMouseFallbackY = 0;
+	DWORD AndroidPhysicalMouseButtonFlags = 0;
+	UBOOL bAndroidPhysicalMouseHiResSeen = 0;
+#endif
 
 #ifdef PLATFORM_ANDROID
         if( GUT99V82QueuedTextLen > 0 )
@@ -4477,6 +4671,22 @@ UBOOL UNSDLViewport::TickInput()
 #ifdef PLATFORM_ANDROID
         UT99V47TickInput( this, bShowWindowsMouse );
         AndroidUpdateNativeMouseCaptureV113( bShowWindowsMouse ); // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
+        // UT99_ANDROID_CHROMEOS_MOUSE_DIAG_V216:
+        // A low-rate breadcrumb distinguishes missing Android hover delivery
+        // from SDL/native capture or Unreal input-state failures.
+        static DOUBLE GUT99V216LastMouseDiag = 0.0;
+        const DOUBLE GUT99V216Now = appSeconds();
+        if( GUT99V216Now - GUT99V216LastMouseDiag > 1.0 )
+        {
+            GUT99V216LastMouseDiag = GUT99V216Now;
+            UT99_ANDROID_SDL_LOGI( "UT99MouseDiag V216 Tick menu=%d seen=%d capture=%d relative=%d mousefocus=%d grab=%d",
+                bShowWindowsMouse ? 1 : 0,
+                GUT99V113NativeMouseSeen ? 1 : 0,
+                GUT99V113NativeMouseCaptureActive ? 1 : 0,
+                SDL_GetRelativeMouseMode() ? 1 : 0,
+                SDL_GetMouseFocus() == hWnd ? 1 : 0,
+                hWnd && SDL_GetWindowGrab( hWnd ) ? 1 : 0 );
+        }
         if( bShowWindowsMouse )
         {
             // UT99_ANDROID_V81_CURSOR_MODE_SWITCH:
@@ -4658,11 +4868,6 @@ while( SDL_PollEvent( &Ev ) )
 						UT99_ANDROID_SDL_LOGI( "v83 SDL_KEYDOWN printable committed sym=%d", (INT)Ev.key.keysym.sym );
 						break;
 					}
-				}
-				else if( Ev.type == SDL_KEYDOWN && (Ev.key.keysym.sym == SDLK_BACKSPACE || Ev.key.keysym.sym == SDLK_DELETE || KeyMap[Ev.key.keysym.scancode] == IK_Backspace) )
-				{
-					UT99V80SendKeyType( this, IK_Backspace );
-					break;
 				}
 #endif
 				CauseInputEvent( KeyMap[Ev.key.keysym.scancode], ( Ev.type == SDL_KEYDOWN ) ? IST_Press : IST_Release );
@@ -5185,6 +5390,17 @@ while( SDL_PollEvent( &Ev ) )
                 break;
             }
 #endif
+#ifdef PLATFORM_ANDROID
+            case SDL_USEREVENT + 0x210:
+                // UT99_ANDROID_CHROMEOS_MOUSE_FRAMEPACED_FLOAT_V210
+                if( Ev.user.code == GUT99AndroidHighResMouseMagicV210 )
+                {
+                    AndroidPhysicalMouseHiResX += (FLOAT)(PTRINT)Ev.user.data1 * GUT99AndroidHighResMouseInvScaleV210;
+                    AndroidPhysicalMouseHiResY += (FLOAT)(PTRINT)Ev.user.data2 * GUT99AndroidHighResMouseInvScaleV210;
+                    bAndroidPhysicalMouseHiResSeen = 1;
+                }
+                break;
+#endif
 case SDL_MOUSEMOTION:
 				if( !SDL_GetRelativeMouseMode() )
 				{
@@ -5213,7 +5429,7 @@ case SDL_MOUSEMOTION:
                         if( bShowWindowsMouse )
                             UT99AndroidApplyNativeMouseToUWindowV110( this, MouseX, MouseY );
                         AndroidUpdateNativeMouseCaptureV113( bShowWindowsMouse ); // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
-                        if( !bShowWindowsMouse )
+                        if( !bShowWindowsMouse && !SDL_GetRelativeMouseMode() )
                             UT99AndroidNativeMouseGameplayMotionV111( this, MouseX, MouseY, UT99AndroidMouseStateFlagsV110( Ev.motion.state ) );
                         static DOUBLE GUT99V110LastMouseMotionLog = 0.0;
                         DOUBLE NowV110Mouse = appSeconds();
@@ -5253,48 +5469,13 @@ case SDL_MOUSEMOTION:
 					if( Ev.motion.xrel || Ev.motion.yrel )
 					{
 #ifdef PLATFORM_ANDROID
-						// UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
+						// UT99_ANDROID_CHROMEOS_MOUSE_FRAMEPACED_FLOAT_V210
+						// Preserve every SDL fallback delta and dispatch once after the
+						// queue is drained. The parallel fixed-point event wins when present.
 						UT99AndroidMarkNativeMouseActivityV111();
-						// Drop SDL's capture/warp residue and insane Android relative bursts,
-						// then scale real relative mouse motion down to UE1-friendly deltas.
-						DOUBLE NowV114Rel = appSeconds();
-						const INT RawRelX = Ev.motion.xrel;
-						const INT RawRelY = Ev.motion.yrel;
-						const INT AbsRelX = Abs( RawRelX );
-						const INT AbsRelY = Abs( RawRelY );
-						UBOOL bDropRelative = 0;
-						if( GUT99V114RelativeWarmupEvents > 0 )
-						{
-							GUT99V114RelativeWarmupEvents--;
-							bDropRelative = 1;
-						}
-						if( NowV114Rel < GUT99V114RelativeIgnoreUntil )
-							bDropRelative = 1;
-						if( AbsRelX > 360 || AbsRelY > 260 )
-							bDropRelative = 1;
-						if( bDropRelative )
-						{
-							if( NowV114Rel - GUT99V114LastDroppedRelativeLog > 0.60 )
-							{
-								GUT99V114LastDroppedRelativeLog = NowV114Rel;
-								UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_NATIVE_MOUSE_STABLE_V114_DROP_REL xrel=%d yrel=%d warmup=%d", RawRelX, RawRelY, GUT99V114RelativeWarmupEvents );
-							}
-							break;
-						}
-						const FLOAT RelScale = 0.34f;
-						const INT RelX = Clamp( (INT)( (FLOAT)RawRelX * RelScale ), -96, 96 );
-						const INT RelY = Clamp( (INT)( (FLOAT)RawRelY * RelScale ), -72, 72 );
-						if( RelX || RelY )
-						{
-							Client->Engine->MouseDelta( this, ViewportButtonFlags, RelX, -RelY );
-							if( RelX ) CauseInputEvent( IK_MouseX, IST_Axis, RelX );
-							if( RelY ) CauseInputEvent( IK_MouseY, IST_Axis, -RelY );
-						}
-						if( NowV114Rel - GUT99V113LastRelativeMotionLog > 0.80 )
-						{
-							GUT99V113LastRelativeMotionLog = NowV114Rel;
-							UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_NATIVE_MOUSE_STABLE_V114_REL raw=%d,%d scaled=%d,%d flags=%lu show=%d", RawRelX, RawRelY, RelX, RelY, (unsigned long)ViewportButtonFlags, bShowWindowsMouse ? 1 : 0 );
-						}
+						AndroidPhysicalMouseFallbackX += Ev.motion.xrel;
+						AndroidPhysicalMouseFallbackY += Ev.motion.yrel;
+						AndroidPhysicalMouseButtonFlags = ViewportButtonFlags;
 #else
 						Client->Engine->MouseDelta( this, ViewportButtonFlags, Ev.motion.xrel, -Ev.motion.yrel );
 						if( Ev.motion.xrel ) CauseInputEvent( IK_MouseX, IST_Axis, Ev.motion.xrel );
@@ -5307,6 +5488,38 @@ case SDL_MOUSEMOTION:
 				break;
 		}
 	}
+
+#ifdef PLATFORM_ANDROID
+	// UT99_ANDROID_CHROMEOS_MOUSE_FRAMEPACED_FLOAT_V210
+	// This is frame aggregation, not smoothing: no previous-frame state is kept.
+	if( !bShowWindowsMouse && SDL_GetRelativeMouseMode() && Client && Client->Engine )
+	{
+		const FLOAT RelScale = 0.34f;
+		const FLOAT RawMouseX = bAndroidPhysicalMouseHiResSeen
+			? AndroidPhysicalMouseHiResX : (FLOAT)AndroidPhysicalMouseFallbackX;
+		const FLOAT RawMouseY = bAndroidPhysicalMouseHiResSeen
+			? AndroidPhysicalMouseHiResY : (FLOAT)AndroidPhysicalMouseFallbackY;
+		const FLOAT MouseDX = RawMouseX * RelScale;
+		const FLOAT MouseDY = RawMouseY * RelScale;
+		const Uint32 CurrentMouseState = SDL_GetMouseState( NULL, NULL );
+		if( CurrentMouseState & SDL_BUTTON_LMASK ) AndroidPhysicalMouseButtonFlags |= MOUSE_Left;
+		if( CurrentMouseState & SDL_BUTTON_RMASK ) AndroidPhysicalMouseButtonFlags |= MOUSE_Right;
+		if( CurrentMouseState & SDL_BUTTON_MMASK ) AndroidPhysicalMouseButtonFlags |= MOUSE_Middle;
+		if( Abs(MouseDX) > 0.00001f || Abs(MouseDY) > 0.00001f )
+		{
+			Client->Engine->MouseDelta( this, AndroidPhysicalMouseButtonFlags, MouseDX, -MouseDY );
+			if( Abs(MouseDX) > 0.00001f ) CauseInputEvent( IK_MouseX, IST_Axis, MouseDX );
+			if( Abs(MouseDY) > 0.00001f ) CauseInputEvent( IK_MouseY, IST_Axis, -MouseDY );
+		}
+		DOUBLE NowV210Rel = appSeconds();
+		if( (RawMouseX != 0.0f || RawMouseY != 0.0f)
+		 && NowV210Rel - GUT99V113LastRelativeMotionLog > 0.80 )
+		{
+			GUT99V113LastRelativeMotionLog = NowV210Rel;
+			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_MOUSE_V210 raw=%.3f,%.3f scaled=%.3f,%.3f hires=%d flags=%lu", RawMouseX, RawMouseY, MouseDX, MouseDY, bAndroidPhysicalMouseHiResSeen ? 1 : 0, (unsigned long)AndroidPhysicalMouseButtonFlags );
+		}
+	}
+#endif
 
 	// Constantly hammer the input system with axis events for axes that are not zero.
 	for ( INT i = 0; i < SDL_CONTROLLER_AXIS_MAX; ++i )
@@ -5419,11 +5632,22 @@ UBOOL UNSDLViewport::Exec( const TCHAR* Cmd, FOutputDevice& Ar )
         if( UT99AndroidParseResolutionModeTokenV166( Cmd, AndroidMode, AndroidModeX, AndroidModeY, hWnd ) )
         {
             UT99AndroidSaveResolutionModeV166( AndroidMode );
+            const UBOOL bAsyncCommitV219 = UT99AndroidUseAsyncResolutionCommitV219();
             UT99AndroidCallJavaResolutionModeV166( AndroidMode );
             if( AndroidModeX > 0 && AndroidModeY > 0 )
             {
-                MakeFullscreen( AndroidModeX, AndroidModeY, 1 );
-                UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS SetRes mode=%s size=%dx%d", TCHAR_TO_ANSI(*AndroidMode), AndroidModeX, AndroidModeY );
+                if( bAsyncCommitV219 )
+                {
+                    UT99AndroidQueueResolutionCommitV219( AndroidModeX, AndroidModeY );
+                    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_ASYNC_RESOLUTION_COMMIT_V219 SetRes mode=%s target=%dx%d awaiting SurfaceHolder", TCHAR_TO_ANSI(*AndroidMode), AndroidModeX, AndroidModeY );
+                }
+                else
+                {
+                    // ChromeOS and Automotive retain their established live
+                    // SetRes path; v219 is deliberately handheld-scoped.
+                    MakeFullscreen( AndroidModeX, AndroidModeY, 1 );
+                    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V219_PRESERVED_PLATFORM_SETRES mode=%s size=%dx%d", TCHAR_TO_ANSI(*AndroidMode), AndroidModeX, AndroidModeY );
+                }
             }
             return 1;
         }

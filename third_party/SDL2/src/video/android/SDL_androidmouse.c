@@ -29,6 +29,7 @@
 #include "../../events/SDL_mouse_c.h"
 
 #include "../../core/android/SDL_android.h"
+#include <stdint.h>
 
 /* See Android's MotionEvent class for constants */
 #define ACTION_DOWN       0
@@ -51,6 +52,14 @@ typedef struct
 
 /* Last known Android mouse button state (includes all buttons) */
 static int last_state;
+
+/* UT99_ANDROID_CHROMEOS_MOUSE_SUBPIXEL_V210
+ * ChromeOS pointer capture supplies floating-point relative deltas. Preserve
+ * the fractional part across SDL's integer mouse events instead of truncating
+ * every MotionEvent independently. */
+static float relative_remainder_x;
+static float relative_remainder_y;
+static int ut99_v216_mouse_diag_count;
 
 /* Blank cursor */
 static SDL_Cursor *empty_cursor;
@@ -170,6 +179,9 @@ static int Android_SetRelativeMouseMode(SDL_bool enabled)
         return SDL_Unsupported();
     }
 
+    relative_remainder_x = 0.0f;
+    relative_remainder_y = 0.0f;
+
     return 0;
 }
 
@@ -186,6 +198,8 @@ void Android_InitMouse(void)
     SDL_SetDefaultCursor(Android_CreateDefaultCursor());
 
     last_state = 0;
+    relative_remainder_x = 0.0f;
+    relative_remainder_y = 0.0f;
 }
 
 void Android_QuitMouse(void)
@@ -211,6 +225,56 @@ static Uint8 TranslateButton(int state)
     }
 }
 
+static void Android_SendMouseMotionPreserveSubpixel(SDL_Window *window, SDL_bool relative, float x, float y)
+{
+    if (relative) {
+        int dx;
+        int dy;
+
+        relative_remainder_x += x;
+        relative_remainder_y += y;
+        dx = (int)relative_remainder_x;
+        dy = (int)relative_remainder_y;
+        relative_remainder_x -= (float)dx;
+        relative_remainder_y -= (float)dy;
+
+        if (dx != 0 || dy != 0) {
+            SDL_SendMouseMotion(window, 0, SDL_TRUE, dx, dy);
+        }
+    } else {
+        relative_remainder_x = 0.0f;
+        relative_remainder_y = 0.0f;
+        SDL_SendMouseMotion(window, 0, SDL_FALSE, (int)x, (int)y);
+    }
+}
+
+/* UT99_ANDROID_CHROMEOS_MOUSE_HIRES_EVENT_V210
+ * SDL_MOUSEMOTION stores relative motion as integers. Queue a parallel 20.12
+ * fixed-point event so NSDLViewport can aggregate the original ChromeOS delta
+ * once per input tick without smoothing or adding latency. */
+#define UT99_ANDROID_HIRES_MOUSE_EVENT (SDL_USEREVENT + 0x210)
+#define UT99_ANDROID_HIRES_MOUSE_MAGIC ((Sint32)0x554D3231)
+#define UT99_ANDROID_HIRES_MOUSE_SCALE 4096.0f
+
+static void Android_SendUT99HighResRelativeMouse(float x, float y)
+{
+    SDL_Event event;
+    const Sint32 fixed_x = (Sint32)(x * UT99_ANDROID_HIRES_MOUSE_SCALE);
+    const Sint32 fixed_y = (Sint32)(y * UT99_ANDROID_HIRES_MOUSE_SCALE);
+
+    if (fixed_x == 0 && fixed_y == 0) {
+        return;
+    }
+
+    SDL_zero(event);
+    event.type = UT99_ANDROID_HIRES_MOUSE_EVENT;
+    event.user.type = UT99_ANDROID_HIRES_MOUSE_EVENT;
+    event.user.code = UT99_ANDROID_HIRES_MOUSE_MAGIC;
+    event.user.data1 = (void *)(intptr_t)fixed_x;
+    event.user.data2 = (void *)(intptr_t)fixed_y;
+    SDL_PushEvent(&event);
+}
+
 void Android_OnMouse(SDL_Window *window, int state, int action, float x, float y, SDL_bool relative)
 {
     int changes;
@@ -220,12 +284,18 @@ void Android_OnMouse(SDL_Window *window, int state, int action, float x, float y
         return;
     }
 
+    if (ut99_v216_mouse_diag_count < 48) {
+        SDL_Log("UT99MouseDiag V216 Android_OnMouse action=%d state=0x%x relative=%d x=%.3f y=%.3f",
+                action, state, relative ? 1 : 0, x, y);
+        ++ut99_v216_mouse_diag_count;
+    }
+
     switch (action) {
     case ACTION_DOWN:
         changes = state & ~last_state;
         button = TranslateButton(changes);
         last_state = state;
-        SDL_SendMouseMotion(window, 0, relative, (int)x, (int)y);
+        Android_SendMouseMotionPreserveSubpixel(window, relative, x, y);
         SDL_SendMouseButton(window, 0, SDL_PRESSED, button);
         break;
 
@@ -233,13 +303,16 @@ void Android_OnMouse(SDL_Window *window, int state, int action, float x, float y
         changes = last_state & ~state;
         button = TranslateButton(changes);
         last_state = state;
-        SDL_SendMouseMotion(window, 0, relative, (int)x, (int)y);
+        Android_SendMouseMotionPreserveSubpixel(window, relative, x, y);
         SDL_SendMouseButton(window, 0, SDL_RELEASED, button);
         break;
 
     case ACTION_MOVE:
     case ACTION_HOVER_MOVE:
-        SDL_SendMouseMotion(window, 0, relative, (int)x, (int)y);
+        if (relative) {
+            Android_SendUT99HighResRelativeMouse(x, y);
+        }
+        Android_SendMouseMotionPreserveSubpixel(window, relative, x, y);
         break;
 
     case ACTION_SCROLL:

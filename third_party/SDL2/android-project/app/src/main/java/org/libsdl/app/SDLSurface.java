@@ -1,5 +1,6 @@
 package org.libsdl.app;
 
+import com.ast.ut99.Ut99MouseDiagnostics;
 
 import android.content.Context;
 import android.content.pm.ActivityInfo;
@@ -46,6 +47,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // buffer to fullscreen.
     protected float mUT99TouchWidth, mUT99TouchHeight;
     protected int mUT99TouchLogCount;
+    protected int mUT99V216MouseDiagCount;
 
     // Is SurfaceView ready for rendering
     public boolean mIsSurfaceReady;
@@ -72,6 +74,7 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         mUT99TouchWidth = 1.0f;
         mUT99TouchHeight = 1.0f;
         mUT99TouchLogCount = 0;
+        mUT99V216MouseDiagCount = 0;
 
         mIsSurfaceReady = false;
     }
@@ -242,9 +245,37 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         return SDLActivity.handleKeyEvent(v, keyCode, event, null);
     }
 
+    // UT99_ANDROID_CHROMEOS_RESOLUTION_MOUSE_MAP_V218:
+    // SurfaceHolder.setFixedSize() changes the render buffer but not this
+    // fullscreen SurfaceView. ChromeOS mouse coordinates therefore remain in
+    // View space and must be mapped into the active SDL/render-buffer space.
+    // These helpers are called only by GameActivity's confirmed ChromeOS path;
+    // Android Automotive and every other Android input path remain untouched.
+    public float ut99MapChromeOSAbsoluteMouseXV218(float viewX) {
+        return ut99MapChromeOSAbsoluteMouseAxisV218(
+                viewX, (float)getWidth(), mWidth);
+    }
+
+    public float ut99MapChromeOSAbsoluteMouseYV218(float viewY) {
+        return ut99MapChromeOSAbsoluteMouseAxisV218(
+                viewY, (float)getHeight(), mHeight);
+    }
+
+    private static float ut99MapChromeOSAbsoluteMouseAxisV218(
+            float value, float viewSize, float surfaceSize) {
+        if (surfaceSize <= 1.0f) return value;
+        if (viewSize > 1.0f && Math.abs(viewSize - surfaceSize) > 1.0f) {
+            value = value * (surfaceSize / viewSize);
+        }
+        if (value < 0.0f) value = 0.0f;
+        if (value > surfaceSize - 1.0f) value = surfaceSize - 1.0f;
+        return value;
+    }
+
     // Touch events
     @Override
     public boolean onTouch(View v, MotionEvent event) {
+        Ut99MouseDiagnostics.logMotion("SDLSurface.onTouch", event, this);
         /* Ref: http://developer.android.com/training/gestures/multi.html */
         int touchDevId = event.getDeviceId();
         final int pointerCount = event.getPointerCount();
@@ -266,7 +297,41 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         // 12290 = Samsung DeX mode desktop mouse
         // 12290 = 0x3002 = 0x2002 | 0x1002 = SOURCE_MOUSE | SOURCE_TOUCHSCREEN
         // 0x2   = SOURCE_CLASS_POINTER
-        if (event.getSource() == InputDevice.SOURCE_MOUSE || event.getSource() == (InputDevice.SOURCE_MOUSE | InputDevice.SOURCE_TOUCHSCREEN)) {
+        // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
+        // ChromeOS can append SOURCE_TOUCHPAD or other source bits. Exact
+        // equality misroutes those events into SDL's finger/touch path.
+        final int ut99V214Source = event.getSource();
+        boolean ut99V214MouseLike =
+                (ut99V214Source & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE
+                || (Build.VERSION.SDK_INT >= 26
+                && (ut99V214Source & InputDevice.SOURCE_MOUSE_RELATIVE)
+                == InputDevice.SOURCE_MOUSE_RELATIVE)
+                || (ut99V214Source & InputDevice.SOURCE_TOUCHPAD)
+                == InputDevice.SOURCE_TOUCHPAD;
+        if (!ut99V214MouseLike) {
+            try {
+                final boolean chromeOS = getContext().getPackageManager().hasSystemFeature(
+                        "org.chromium.arc.device_management");
+                final boolean controller =
+                        (ut99V214Source & InputDevice.SOURCE_GAMEPAD)
+                        == InputDevice.SOURCE_GAMEPAD
+                        || (ut99V214Source & InputDevice.SOURCE_JOYSTICK)
+                        == InputDevice.SOURCE_JOYSTICK;
+                ut99V214MouseLike = chromeOS && !controller
+                        && (((ut99V214Source & InputDevice.SOURCE_CLASS_POINTER)
+                        == InputDevice.SOURCE_CLASS_POINTER)
+                        || ((ut99V214Source & InputDevice.SOURCE_CLASS_POSITION)
+                        == InputDevice.SOURCE_CLASS_POSITION));
+            } catch (Throwable ignored) {
+            }
+        }
+        if (!ut99V214MouseLike && pointerCount > 0) {
+            try {
+                ut99V214MouseLike = event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE;
+            } catch (Throwable ignored) {
+            }
+        }
+        if (ut99V214MouseLike) {
             int mouseButton = 1;
             try {
                 Object object = event.getClass().getMethod("getButtonState").invoke(event);
@@ -288,6 +353,13 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             float ut99MouseRawY = y;
             boolean ut99MouseScaled = false;
 
+            boolean ut99ChromeOSV218 = false;
+            try {
+                ut99ChromeOSV218 = getContext().getPackageManager().hasSystemFeature(
+                        "org.chromium.arc.device_management");
+            } catch (Throwable ignored) {
+            }
+
             // UT99_ANDROID_V79_OUYA_MOUSE_NATIVE_SCALE_FIX:
             // OUYA's touchpad/native mouse cursor reports coordinates in the
             // fullscreen Android view space even when UT99 renders to a smaller
@@ -297,6 +369,15 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             // mapping before SDL creates mouse motion/button events.
             // Example: 1920x1080 view, 1440x810 surface => x/y * 0.75.
             if (!relativeMouse && action != MotionEvent.ACTION_SCROLL
+                    && ut99ChromeOSV218) {
+                // Use the local SurfaceView dimensions on ChromeOS. Unlike real
+                // display metrics, these are the coordinate space MotionEvent
+                // actually uses (also correct for ARC window/fullscreen changes).
+                x = ut99MapChromeOSAbsoluteMouseXV218(x);
+                y = ut99MapChromeOSAbsoluteMouseYV218(y);
+                ut99MouseScaled = Math.abs(x - ut99MouseRawX) > 0.01f
+                        || Math.abs(y - ut99MouseRawY) > 0.01f;
+            } else if (!relativeMouse && action != MotionEvent.ACTION_SCROLL
                     && mWidth > 1.0f && mHeight > 1.0f
                     && mUT99TouchWidth > 1.0f && mUT99TouchHeight > 1.0f
                     && (mUT99TouchWidth > mWidth + 1.0f || mUT99TouchHeight > mHeight + 1.0f)) {
@@ -385,6 +466,33 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         return true;
    }
 
+    @Override
+    public boolean onHoverEvent(MotionEvent event) {
+        // UT99_ANDROID_CHROMEOS_VIEW_HOVER_ROUTE_V216:
+        // ARC may send cursor motion through View.dispatchHoverEvent() without
+        // invoking the generic-motion listener used by SDL. Forward it through
+        // that listener explicitly so menu hover and the first gameplay motion
+        // reach Android_OnMouse.
+        if (event != null) {
+            Ut99MouseDiagnostics.logMotion("SDLSurface.onHoverEvent", event, this);
+            if (mUT99V216MouseDiagCount < 48) {
+                Log.i("UT99MouseDiag", "V216 SDLSurface.onHoverEvent action="
+                        + event.getActionMasked() + " source=0x"
+                        + Integer.toHexString(event.getSource()) + " x="
+                        + event.getX(0) + " y=" + event.getY(0));
+                mUT99V216MouseDiagCount++;
+            }
+            try {
+                if (SDLActivity.getMotionListener().onGenericMotion(this, event)) {
+                    return true;
+                }
+            } catch (Throwable t) {
+                Log.w("UT99MouseDiag", "V216 hover forwarding failed", t);
+            }
+        }
+        return super.onHoverEvent(event);
+    }
+
     // Sensor events
     public void enableSensor(int sensortype, boolean enabled) {
         // TODO: This uses getDefaultSensor - what if we have >1 accels?
@@ -452,6 +560,14 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
     // Captured pointer events for API 26.
     public boolean onCapturedPointerEvent(MotionEvent event)
     {
+        Ut99MouseDiagnostics.logMotion("SDLSurface.onCapturedPointerEvent", event, this);
+        if (mUT99V216MouseDiagCount < 48) {
+            Log.i("UT99MouseDiag", "V216 SDLSurface.onCapturedPointerEvent action="
+                    + event.getActionMasked() + " source=0x"
+                    + Integer.toHexString(event.getSource()) + " x="
+                    + event.getX(0) + " y=" + event.getY(0));
+            mUT99V216MouseDiagCount++;
+        }
         int action = event.getActionMasked();
 
         float x, y;
@@ -488,5 +604,12 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         }
 
         return false;
+    }
+
+    @Override
+    public void onPointerCaptureChange(boolean hasCapture) {
+        super.onPointerCaptureChange(hasCapture);
+        Ut99MouseDiagnostics.logPointerCapture(
+                "SDLSurface.onPointerCaptureChange", this, hasCapture);
     }
 }

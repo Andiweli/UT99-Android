@@ -36,6 +36,11 @@ public class GameActivity extends SDLActivity {
     // Native UWindow code toggles this flag only when an actual edit-field candidate is tapped.
     private static volatile boolean sUt99ImeWanted;
     private static boolean sUt99V72LoggedActive = false;
+    private int ut99V212LastDesktopInputReason = Integer.MIN_VALUE;
+    private int ut99V216MouseDiagCount;
+    private int ut99V218MouseMapLogCount;
+    private android.os.Handler ut99V217DiagHandler;
+    private java.lang.Runnable ut99V217DiagPoll;
 
     public static void ut99SetImeWanted(boolean wanted) {
         sUt99ImeWanted = wanted;
@@ -82,6 +87,17 @@ public class GameActivity extends SDLActivity {
                 activity.ut99V166ApplyResolutionMode(mode, true);
             }
         });
+    }
+
+    public static boolean ut99UseAsyncResolutionCommitV219() {
+        // Retroid/regular Android SurfaceHolder changes are asynchronous and
+        // need the native v219 commit handshake. Preserve the already verified
+        // ChromeOS path and the dedicated Automotive behavior byte-for-byte.
+        final GameActivity activity = sUt99V64ActivityRef != null
+                ? sUt99V64ActivityRef.get() : null;
+        return activity != null
+                && !activity.ut99IsChromeOSV211()
+                && !activity.isAutomotiveDevice();
     }
 
     private static boolean bridgeLoaded;
@@ -208,7 +224,42 @@ public class GameActivity extends SDLActivity {
         android.util.Log.i("UT99Android", "UT99_ANDROID_V166_REAL_RENDER_RESOLUTIONS active mode=" + ut99V166ResolutionMode);
         ut99V50Immersive(); // v50 onCreate
         applyUt99ImmersiveMode();
+        if (ut99IsChromeOSV211()) {
+            Ut99MouseDiagnostics.init(this);
+            Ut99MouseDiagnostics.log("ACTIVITY", "GameActivity created; SDL content="
+                    + (SDLActivity.getContentView() != null
+                    ? SDLActivity.getContentView().getClass().getName() : "null"));
+            Toast.makeText(this, "Mouse diagnostic: "
+                    + Ut99MouseDiagnostics.getDisplayLocation(), Toast.LENGTH_LONG).show();
+        }
         ut99InstallRetroTouchBeta4();
+        ut99V217StartMouseDiagnostics();
+    }
+
+    private void ut99V217StartMouseDiagnostics() {
+        if (!ut99IsChromeOSV211()) return;
+        ut99V217DiagHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        ut99V217DiagPoll = new java.lang.Runnable() {
+            @Override public void run() {
+                try {
+                    android.view.View content = SDLActivity.getContentView();
+                    int uiState;
+                    try {
+                        uiState = nativeAndroidTouchUiStateRT();
+                    } catch (Throwable ignored) {
+                        uiState = -1;
+                    }
+                    Ut99MouseDiagnostics.logPointerCapture(
+                            "POLL uiState=" + uiState, content, false);
+                } catch (Throwable t) {
+                    Ut99MouseDiagnostics.log("POLL", "failed: " + t);
+                }
+                if (ut99V217DiagHandler != null) {
+                    ut99V217DiagHandler.postDelayed(this, 1000L);
+                }
+            }
+        };
+        ut99V217DiagHandler.post(ut99V217DiagPoll);
     }
 
 
@@ -231,6 +282,11 @@ public class GameActivity extends SDLActivity {
     @Override
     protected void onDestroy() {
         final boolean finishing = isFinishing();
+        if (ut99V217DiagHandler != null) {
+            ut99V217DiagHandler.removeCallbacksAndMessages(null);
+            ut99V217DiagHandler = null;
+            ut99V217DiagPoll = null;
+        }
         try {
             if (ut99RetroTouchBridge != null) {
                 ut99RetroTouchBridge.destroy();
@@ -239,6 +295,8 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable t) {
             Log.w(TAG, "RetroTouch destroy cleanup failed", t);
         }
+        Ut99MouseDiagnostics.log("ACTIVITY", "GameActivity destroying");
+        Ut99MouseDiagnostics.close();
         super.onDestroy();
 
         try {
@@ -1028,9 +1086,6 @@ public class GameActivity extends SDLActivity {
     }
 
     boolean ut99RetroTouchHasTouchscreen() {
-        // Retroid-class handhelds expose both a touchscreen and an integrated
-        // GAMEPAD/JOYSTICK. RetroTouch must remain available there. OUYA and
-        // non-touch ChromeOS/TV devices stay clean because they report no touch.
         try {
             if (isAutomotiveDevice()) return true;
             android.content.pm.PackageManager pm = getPackageManager();
@@ -1038,6 +1093,117 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable t) {
             return true;
         }
+    }
+
+    boolean ut99RetroTouchHasDesktopInput() {
+        // UT99_ANDROID_CHROMEOS_INPUT_MODE_V212:
+        // RetroTouch is for a genuinely touch-only device. ChromeOS commonly
+        // exposes a mouse as MOUSE|TOUCHSCREEN, so FEATURE_TOUCHSCREEN alone is
+        // not sufficient. On non-ChromeOS Android, only externally attached
+        // keyboard/mouse devices count. Internal gpio/uinput devices on Retroid
+        // and similar handhelds often claim keyboard or mouse capabilities even
+        // though they are neither usable desktop input nor an active controller.
+        try {
+            if (ut99IsChromeOSV211()) {
+                return ut99DesktopInputResultV211(1, null);
+            }
+
+            int[] ids = android.view.InputDevice.getDeviceIds();
+            for (int id : ids) {
+                android.view.InputDevice device = android.view.InputDevice.getDevice(id);
+                if (device == null || device.isVirtual()) continue;
+                if (ut99IsSoftwareVirtualDesktopDeviceV212(device)) continue;
+                if (!ut99IsExternalInputDeviceV211(device)) continue;
+
+                final int sources = device.getSources();
+                final boolean controllerClass =
+                        (sources & android.view.InputDevice.SOURCE_GAMEPAD)
+                                == android.view.InputDevice.SOURCE_GAMEPAD
+                                || (sources & android.view.InputDevice.SOURCE_JOYSTICK)
+                                == android.view.InputDevice.SOURCE_JOYSTICK;
+                if (controllerClass) continue;
+
+                final boolean alphabeticKeyboard =
+                        device.getKeyboardType() == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC
+                                && (sources & android.view.InputDevice.SOURCE_KEYBOARD)
+                                == android.view.InputDevice.SOURCE_KEYBOARD;
+                final boolean mouse =
+                        (sources & android.view.InputDevice.SOURCE_MOUSE)
+                                == android.view.InputDevice.SOURCE_MOUSE
+                                || (android.os.Build.VERSION.SDK_INT >= 26
+                                && (sources & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
+                                == android.view.InputDevice.SOURCE_MOUSE_RELATIVE);
+                if (alphabeticKeyboard) return ut99DesktopInputResultV211(2, device);
+                if (mouse) return ut99DesktopInputResultV211(3, device);
+            }
+            return ut99DesktopInputResultV211(0, null);
+        } catch (Throwable t) {
+            // A real keyboard/mouse event still suppresses RetroTouch immediately
+            // through onHardwareDesktopInput(). Do not permanently hide touch
+            // controls merely because one vendor InputDevice is malformed.
+            Log.w(TAG, "desktop input inventory unavailable", t);
+            return ut99DesktopInputResultV211(-1, null);
+        }
+    }
+
+    private boolean ut99IsChromeOSV211() {
+        try {
+            return getPackageManager().hasSystemFeature("org.chromium.arc.device_management");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean ut99IsExternalInputDeviceV211(android.view.InputDevice device) {
+        if (device == null || android.os.Build.VERSION.SDK_INT < 29) return false;
+        try {
+            return Ut99Api29InputDevice.isExternal(device);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean ut99IsSoftwareVirtualDesktopDeviceV212(android.view.InputDevice device) {
+        if (device == null) return false;
+        try {
+            String name = device.getName();
+            if (name == null) return false;
+            String normalized = name.toLowerCase(java.util.Locale.US);
+            // Some handheld firmware keeps software cursor devices registered
+            // permanently and even reports them as external/non-virtual. They
+            // are not evidence of a connected physical mouse or keyboard.
+            return normalized.contains("virtual mouse")
+                    || normalized.contains("virtual keyboard")
+                    || normalized.contains("virtual pointer");
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private boolean ut99DesktopInputResultV211(int reason, android.view.InputDevice device) {
+        if (reason != ut99V212LastDesktopInputReason) {
+            ut99V212LastDesktopInputReason = reason;
+            String detail;
+            if (reason == 1) {
+                detail = "chromeos-arc";
+            } else if (reason == 2) {
+                detail = "external-keyboard";
+            } else if (reason == 3) {
+                detail = "external-mouse";
+            } else if (reason < 0) {
+                detail = "inventory-error";
+            } else {
+                detail = "none";
+            }
+            if (device != null) {
+                detail += " name=" + device.getName()
+                        + " id=" + device.getId()
+                        + " sources=0x" + Integer.toHexString(device.getSources());
+            }
+            Log.i(TAG, "UT99_ANDROID_DESKTOP_INPUT_V212 reason=" + detail
+                    + " present=" + (reason > 0));
+        }
+        return reason > 0;
     }
 
     int ut99RetroTouchInputResetSerial() {
@@ -1057,6 +1223,134 @@ public class GameActivity extends SDLActivity {
         return ((source & android.view.InputDevice.SOURCE_GAMEPAD) == android.view.InputDevice.SOURCE_GAMEPAD)
                 || ((source & android.view.InputDevice.SOURCE_JOYSTICK) == android.view.InputDevice.SOURCE_JOYSTICK)
                 || ((source & android.view.InputDevice.SOURCE_DPAD) == android.view.InputDevice.SOURCE_DPAD);
+    }
+
+    private boolean isPhysicalKeyboardEventV210(android.view.KeyEvent event) {
+        if (event == null) return false;
+        try {
+            android.view.InputDevice device = event.getDevice();
+            if (device == null) return false;
+            final boolean chromeOS = ut99IsChromeOSV211();
+            if (!chromeOS && device.isVirtual()) return false;
+            // UT99_ANDROID_CHROMEOS_VIRTUAL_HID_BYPASS_V213:
+            // ARC may expose the real Chromebook keyboard through a device name
+            // containing "Virtual Keyboard".  That name is only a false-positive
+            // filter for handheld firmware outside ChromeOS.
+            if (!chromeOS
+                    && ut99IsSoftwareVirtualDesktopDeviceV212(device)) return false;
+            final int sources = device.getSources();
+            final boolean controllerClass =
+                    (sources & android.view.InputDevice.SOURCE_GAMEPAD)
+                            == android.view.InputDevice.SOURCE_GAMEPAD
+                            || (sources & android.view.InputDevice.SOURCE_JOYSTICK)
+                            == android.view.InputDevice.SOURCE_JOYSTICK;
+            final boolean desktopKeyboardDevice = chromeOS
+                    || android.os.Build.VERSION.SDK_INT < 29
+                    || ut99IsExternalInputDeviceV211(device);
+            return !controllerClass && desktopKeyboardDevice
+                    && device.getKeyboardType() == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC
+                    && (event.getSource() & android.view.InputDevice.SOURCE_KEYBOARD)
+                    == android.view.InputDevice.SOURCE_KEYBOARD;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private boolean isPhysicalMouseEventV210(android.view.MotionEvent event) {
+        if (event == null) return false;
+        try {
+            // UT99_ANDROID_CHROMEOS_VIRTUAL_HID_BYPASS_V213:
+            // ChromeOS/ARC frequently presents a physical mouse or trackpad as a
+            // "Virtual Mouse".  Filtering it here drops hover/relative motion but
+            // still lets a separate click path through, producing an invisible
+            // cursor that flashes only when clicked.  Keep the Retroid software
+            // cursor safeguard on Android handhelds, never on confirmed ARC.
+            if (!ut99IsChromeOSV211()
+                    && ut99IsSoftwareVirtualDesktopDeviceV212(event.getDevice())) return false;
+        } catch (Throwable ignored) {
+        }
+        final int source = event.getSource();
+        if ((source & android.view.InputDevice.SOURCE_MOUSE)
+                == android.view.InputDevice.SOURCE_MOUSE) return true;
+        if (android.os.Build.VERSION.SDK_INT >= 26
+                && (source & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
+                == android.view.InputDevice.SOURCE_MOUSE_RELATIVE) return true;
+        // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
+        // ARC can keep SOURCE_TOUCHPAD (or combine it with SOURCE_MOUSE) on
+        // generic-motion events instead of presenting an exact SOURCE_MOUSE.
+        if (ut99IsChromeOSV211()
+                && (source & android.view.InputDevice.SOURCE_TOUCHPAD)
+                == android.view.InputDevice.SOURCE_TOUCHPAD) return true;
+        if (ut99IsChromeOSV211()
+                && !isAndroidGamepadSourceV47(event)
+                && (((source & android.view.InputDevice.SOURCE_CLASS_POINTER)
+                == android.view.InputDevice.SOURCE_CLASS_POINTER)
+                || ((source & android.view.InputDevice.SOURCE_CLASS_POSITION)
+                == android.view.InputDevice.SOURCE_CLASS_POSITION))) return true;
+        try {
+            return event.getPointerCount() > 0
+                    && event.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_MOUSE;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean ut99HasPointerCaptureV210() {
+        if (android.os.Build.VERSION.SDK_INT < 26) return false;
+        try {
+            android.view.View content = SDLActivity.getContentView();
+            return content != null && Ut99Api26View.hasPointerCapture(content);
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private float ut99MapChromeOSAbsoluteMouseXV218(float x) {
+        if (!ut99IsChromeOSV211()) return x;
+        android.view.View content = SDLActivity.getContentView();
+        if (content instanceof org.libsdl.app.SDLSurface) {
+            return ((org.libsdl.app.SDLSurface) content)
+                    .ut99MapChromeOSAbsoluteMouseXV218(x);
+        }
+        return x;
+    }
+
+    private float ut99MapChromeOSAbsoluteMouseYV218(float y) {
+        if (!ut99IsChromeOSV211()) return y;
+        android.view.View content = SDLActivity.getContentView();
+        if (content instanceof org.libsdl.app.SDLSurface) {
+            return ((org.libsdl.app.SDLSurface) content)
+                    .ut99MapChromeOSAbsoluteMouseYV218(y);
+        }
+        return y;
+    }
+
+    private void ut99LogChromeOSMouseMapV218(float rawX, float rawY,
+                                             float mappedX, float mappedY,
+                                             int action) {
+        if (ut99V218MouseMapLogCount >= 48) return;
+        if (Math.abs(rawX - mappedX) <= 0.01f
+                && Math.abs(rawY - mappedY) <= 0.01f) return;
+        ut99V218MouseMapLogCount++;
+        Ut99MouseDiagnostics.log("CHROMEOS_MAP_V218",
+                "action=" + action + " raw=" + rawX + "," + rawY
+                        + " mapped=" + mappedX + "," + mappedY);
+    }
+
+    @android.annotation.TargetApi(26)
+    private static final class Ut99Api26View {
+        private Ut99Api26View() {}
+        static boolean hasPointerCapture(android.view.View view) {
+            return view.hasPointerCapture();
+        }
+    }
+
+    @android.annotation.TargetApi(29)
+    private static final class Ut99Api29InputDevice {
+        private Ut99Api29InputDevice() {}
+        static boolean isExternal(android.view.InputDevice device) {
+            return device.isExternal();
+        }
     }
 
     private static boolean isOuyaMenuKeyV79(int keyCode) {
@@ -1092,8 +1386,13 @@ public class GameActivity extends SDLActivity {
     public boolean dispatchKeyEvent(android.view.KeyEvent event) {
         final int action = event.getAction();
         final int keyCode = event.getKeyCode();
-        boolean textDeleteKey = keyCode == android.view.KeyEvent.KEYCODE_DEL
-                || keyCode == android.view.KeyEvent.KEYCODE_FORWARD_DEL;
+        final boolean physicalKeyboard = isPhysicalKeyboardEventV210(event);
+        boolean textDeleteKey = !physicalKeyboard
+                && (keyCode == android.view.KeyEvent.KEYCODE_DEL
+                || keyCode == android.view.KeyEvent.KEYCODE_FORWARD_DEL);
+        if (ut99RetroTouchBridge != null && physicalKeyboard) {
+            ut99RetroTouchBridge.onHardwareDesktopInput();
+        }
         if (!sUt99V72LoggedActive) {
             sUt99V72LoggedActive = true;
             android.util.Log.i("UT99Android", "UT99_ANDROID_V72_ACTIVE GameActivity single START toggle path loaded");
@@ -1126,6 +1425,98 @@ public class GameActivity extends SDLActivity {
             }
         }
         return super.dispatchKeyEvent(event);
+    }
+
+    @Override
+    public boolean dispatchGenericMotionEvent(android.view.MotionEvent event) {
+        if (ut99IsChromeOSV211()) {
+            Ut99MouseDiagnostics.logMotion("GameActivity.dispatchGeneric",
+                    event, SDLActivity.getContentView());
+        }
+        if (ut99IsChromeOSV211() && event != null && ut99V216MouseDiagCount < 48) {
+            android.view.InputDevice device = event.getDevice();
+            String deviceName = device != null ? device.getName() : "null";
+            int tool = event.getPointerCount() > 0 ? event.getToolType(0) : -1;
+            Log.i("UT99MouseDiag", "V216 GameActivity.dispatchGeneric action="
+                    + event.getActionMasked() + " source=0x"
+                    + Integer.toHexString(event.getSource()) + " tool=" + tool
+                    + " device=" + deviceName + " capture="
+                    + ut99HasPointerCaptureV210());
+            ut99V216MouseDiagCount++;
+        }
+        // UT99_ANDROID_CHROMEOS_MOUSE_ACTIVITY_ROUTE_V210:
+        // ChromeOS may deliver mouse hover, capture and button events to the
+        // Activity/DecorView instead of the SDL Surface's generic-motion
+        // listener. Route real mouse input into SDL exactly once and keep
+        // MOUSE|TOUCHSCREEN devices out of RetroTouch's touch path.
+        if (isPhysicalMouseEventV210(event)) {
+            if (ut99RetroTouchBridge != null) {
+                ut99RetroTouchBridge.onHardwareDesktopInput();
+            }
+
+            final int action = event.getActionMasked();
+            final int source = event.getSource();
+            final boolean relative = ut99HasPointerCaptureV210()
+                    || (android.os.Build.VERSION.SDK_INT >= 26
+                    && (source & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
+                    == android.view.InputDevice.SOURCE_MOUSE_RELATIVE);
+
+            switch (action) {
+                case android.view.MotionEvent.ACTION_HOVER_MOVE:
+                case android.view.MotionEvent.ACTION_MOVE: {
+                    float x = event.getX(0);
+                    float y = event.getY(0);
+                    if (relative && android.os.Build.VERSION.SDK_INT >= 26) {
+                        float relativeX = event.getAxisValue(android.view.MotionEvent.AXIS_RELATIVE_X, 0);
+                        float relativeY = event.getAxisValue(android.view.MotionEvent.AXIS_RELATIVE_Y, 0);
+                        if (relativeX != 0.0f || relativeY != 0.0f) {
+                            x = relativeX;
+                            y = relativeY;
+                        }
+                    } else {
+                        final float rawX = x;
+                        final float rawY = y;
+                        x = ut99MapChromeOSAbsoluteMouseXV218(x);
+                        y = ut99MapChromeOSAbsoluteMouseYV218(y);
+                        ut99LogChromeOSMouseMapV218(rawX, rawY, x, y, action);
+                    }
+                    SDLActivity.onNativeMouse(0, action, x, y, relative);
+                    return true;
+                }
+
+                case android.view.MotionEvent.ACTION_BUTTON_PRESS:
+                case android.view.MotionEvent.ACTION_BUTTON_RELEASE:
+                case android.view.MotionEvent.ACTION_DOWN:
+                case android.view.MotionEvent.ACTION_UP: {
+                    final int nativeAction =
+                            (action == android.view.MotionEvent.ACTION_BUTTON_PRESS
+                                    || action == android.view.MotionEvent.ACTION_DOWN)
+                                    ? android.view.MotionEvent.ACTION_DOWN
+                                    : android.view.MotionEvent.ACTION_UP;
+                    final float rawX = event.getX(0);
+                    final float rawY = event.getY(0);
+                    final float mappedX = relative
+                            ? rawX : ut99MapChromeOSAbsoluteMouseXV218(rawX);
+                    final float mappedY = relative
+                            ? rawY : ut99MapChromeOSAbsoluteMouseYV218(rawY);
+                    ut99LogChromeOSMouseMapV218(
+                            rawX, rawY, mappedX, mappedY, action);
+                    SDLActivity.onNativeMouse(event.getButtonState(), nativeAction,
+                            mappedX, mappedY, relative);
+                    return true;
+                }
+
+                case android.view.MotionEvent.ACTION_SCROLL:
+                    SDLActivity.onNativeMouse(0, action,
+                            event.getAxisValue(android.view.MotionEvent.AXIS_HSCROLL, 0),
+                            event.getAxisValue(android.view.MotionEvent.AXIS_VSCROLL, 0), false);
+                    return true;
+
+                default:
+                    break;
+            }
+        }
+        return super.dispatchGenericMotionEvent(event);
     }
 
     @Override
@@ -1586,10 +1977,16 @@ public class GameActivity extends SDLActivity {
 
     @Override
     public boolean dispatchTouchEvent(android.view.MotionEvent ev) {
+        if (ut99IsChromeOSV211()) {
+            Ut99MouseDiagnostics.logMotion("GameActivity.dispatchTouch",
+                    ev, SDLActivity.getContentView());
+        }
         // RetroTouch must see the current native menu state before a fresh pointer
         // is dispatched, otherwise the first UWindow tap after opening a menu can
         // be consumed by a stale GAMEPLAY mode.
-        if (ut99RetroTouchBridge != null) {
+        if (ut99RetroTouchBridge != null && isPhysicalMouseEventV210(ev)) {
+            ut99RetroTouchBridge.onHardwareDesktopInput();
+        } else if (ut99RetroTouchBridge != null) {
             ut99RetroTouchBridge.beforeHostTouch(ev);
         }
         // v60: no low-res touch rescaling. Touch/mouse events stay in native
@@ -1602,6 +1999,17 @@ public class GameActivity extends SDLActivity {
     private void ut99InstallRetroTouchBeta4() {
         try {
             if (ut99RetroTouchBridge != null) return;
+            // UT99_ANDROID_CHROMEOS_NO_OVERLAY_VIEW_V215:
+            // RetroTouchMode.OFF only stops drawing/touch handling; the AAR's
+            // full-screen View remains focusable above SDL. ChromeOS can then
+            // bind hover/pointer capture to that invisible View, so clicks reach
+            // SDL intermittently while motion never does. A Chromebook is never
+            // a RetroTouch target, therefore do not add the overlay View at all.
+            if (ut99IsChromeOSV211()) {
+                Log.i(TAG, "UT99_ANDROID_CHROMEOS_NO_OVERLAY_VIEW_V215 skipped RetroTouch attachment");
+                Ut99MouseDiagnostics.log("RETROTOUCH", "attachment skipped on ChromeOS");
+                return;
+            }
             ut99V91EnsureTouchOverlayConfigDefault();
             ut99V91MigrateLegacyTouchOverlayForRetroTouch();
             ut99RetroTouchBridge = new Ut99RetroTouchBridge(this);

@@ -38,6 +38,7 @@ final class Ut99RetroTouchBridge {
     private static final long STATE_POLL_MS = 50L;
     private static final long CONFIG_POLL_MS = 650L;
     private static final long CONTROLLER_POLL_MS = 200L;
+    private static final long DESKTOP_INPUT_POLL_MS = 250L;
 
     // Keep these IDs stable: RetroTouch stores edited layouts under them.
     private static final String GAMEPLAY_LAYOUT_ID = "ut99_android_retrotouch_beta4_gameplay_v2";
@@ -60,8 +61,10 @@ final class Ut99RetroTouchBridge {
     private boolean editing;
     private boolean cachedTouchControlsEnabled = true;
     private boolean cachedControllerConnected;
+    private boolean cachedDesktopInput;
     private long lastConfigReadMs;
     private long lastControllerReadMs;
+    private long lastDesktopInputReadMs;
     private int lastNativeResetSerial;
     private int lastNativeUiState = -1;
     private RetroTouchMode appliedMode = RetroTouchMode.OFF;
@@ -141,9 +144,16 @@ final class Ut99RetroTouchBridge {
         // disconnect/disable without restarting the Activity.
         view.setAutoHideOnController(false);
         cachedControllerConnected = RetroTouchControllers.isControllerConnected();
+        cachedDesktopInput = host.ut99RetroTouchHasDesktopInput();
         lastControllerReadMs = android.os.SystemClock.uptimeMillis();
+        lastDesktopInputReadMs = lastControllerReadMs;
         view.setOverlayEnabled(true);
         view.setMode(RetroTouchMode.OFF);
+        // RETROTOUCH_OFF_VIEW_PASSTHROUGH_V215:
+        // OFF in the Beta 4 AAR does not change View visibility. Keep the
+        // full-screen focusable overlay out of Android hit-testing/focus until
+        // controls are actually needed.
+        view.setVisibility(android.view.View.GONE);
         lastNativeResetSerial = host.ut99RetroTouchInputResetSerial();
     }
 
@@ -204,6 +214,18 @@ final class Ut99RetroTouchBridge {
             rescanSdlControllers("hardware-input");
             scheduleSdlControllerRescan();
         }
+    }
+
+    void onHardwareDesktopInput() {
+        // UT99_ANDROID_CHROMEOS_RETROTOUCH_GATE_V210:
+        // An actual keyboard or mouse event is authoritative even if Android's
+        // InputDevice inventory is briefly stale during ChromeOS hotplug.
+        final boolean changed = !cachedDesktopInput;
+        cachedDesktopInput = true;
+        lastDesktopInputReadMs = android.os.SystemClock.uptimeMillis();
+        if (!changed) return;
+        Log.i(TAG, "hardware keyboard/mouse input observed; suppressing RetroTouch");
+        refreshState(false);
     }
 
     void beforeHostTouch(MotionEvent event) {
@@ -355,11 +377,20 @@ final class Ut99RetroTouchBridge {
             cachedControllerConnected = connected;
         }
 
+        boolean desktopInputChanged = false;
+        if (forceLog || now - lastDesktopInputReadMs >= DESKTOP_INPUT_POLL_MS) {
+            lastDesktopInputReadMs = now;
+            boolean present = host.ut99RetroTouchHasDesktopInput();
+            desktopInputChanged = present != cachedDesktopInput;
+            cachedDesktopInput = present;
+        }
+
         final int nativeUiState = host.ut99RetroTouchUiState();
         final boolean touchCapable = host.ut99RetroTouchHasTouchscreen();
 
         RetroTouchMode wanted = RetroTouchMode.OFF;
-        if (cachedTouchControlsEnabled && touchCapable && !cachedControllerConnected) {
+        if (cachedTouchControlsEnabled && touchCapable
+                && !cachedControllerConnected && !cachedDesktopInput) {
             if (nativeUiState == 1) {
                 wanted = RetroTouchMode.NAVIGATION;
             } else if (nativeUiState == 2) {
@@ -367,11 +398,13 @@ final class Ut99RetroTouchBridge {
             }
         }
 
-        if (forceLog || nativeUiState != lastNativeUiState || controllerChanged) {
+        if (forceLog || nativeUiState != lastNativeUiState
+                || controllerChanged || desktopInputChanged) {
             Log.i(TAG, "state native=" + nativeUiState
                     + " enabled=" + cachedTouchControlsEnabled
                     + " touchCapable=" + touchCapable
                     + " controller=" + cachedControllerConnected
+                    + " desktopInput=" + cachedDesktopInput
                     + " wanted=" + wanted);
             lastNativeUiState = nativeUiState;
         }
@@ -423,7 +456,12 @@ final class Ut99RetroTouchBridge {
     }
 
     private void applyMode(RetroTouchMode wanted) {
+        final int wantedVisibility = wanted == RetroTouchMode.OFF
+                ? android.view.View.GONE : android.view.View.VISIBLE;
         if (wanted == appliedMode) {
+            if (view.getVisibility() != wantedVisibility) {
+                view.setVisibility(wantedVisibility);
+            }
             return;
         }
 
@@ -431,9 +469,16 @@ final class Ut99RetroTouchBridge {
         // important for NAVIGATION <-> GAMEPLAY transitions and respawns.
         view.resetInputState();
         releaseHostInputState();
+        if (wanted != RetroTouchMode.OFF) {
+            view.setVisibility(android.view.View.VISIBLE);
+        }
         view.setMode(wanted);
         appliedMode = wanted;
-        view.bringToFront();
+        if (wanted == RetroTouchMode.OFF) {
+            view.setVisibility(android.view.View.GONE);
+        } else {
+            view.bringToFront();
+        }
         view.invalidate();
         Log.i(TAG, "mode=" + wanted);
     }

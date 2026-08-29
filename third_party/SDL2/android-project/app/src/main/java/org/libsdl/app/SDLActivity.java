@@ -1238,7 +1238,11 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
 
     // This method is called by SDLControllerManager's API 26 Generic Motion Handler.
     public static View getContentView() {
-        return mLayout;
+        // UT99_ANDROID_CHROMEOS_CAPTURE_TARGET_V214:
+        // SDLSurface owns onCapturedPointerEvent(). Requesting pointer capture
+        // from the parent RelativeLayout can leave ChromeOS sending relative
+        // events to a View that never forwards them to SDL.
+        return mSurface != null ? mSurface : mLayout;
     }
 
     static class ShowTextInputTask implements Runnable {
@@ -2142,4 +2146,3 @@ class SDLClipboardHandler implements
         SDLActivity.onNativeClipboardChanged();
     }
 }
-
