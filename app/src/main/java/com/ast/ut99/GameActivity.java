@@ -39,7 +39,20 @@ public class GameActivity extends SDLActivity {
     private int ut99V212LastDesktopInputReason = Integer.MIN_VALUE;
 
     public static void ut99SetImeWanted(boolean wanted) {
+        final boolean wasWanted = sUt99ImeWanted;
         sUt99ImeWanted = wanted;
+        // UT99_ANDROID_PERF_A_IMMERSIVE:
+        // Hiding a stale IME used to happen as a side effect of the (very
+        // frequent) immersive re-apply. Do it once when native code drops the
+        // keyboard request instead.
+        if (wasWanted && !wanted) {
+            final GameActivity activity = sUt99V64ActivityRef != null ? sUt99V64ActivityRef.get() : null;
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override public void run() { activity.ut99V76HideImeUnlessRequested(); }
+                });
+            }
+        }
     }
 
     public static boolean ut99IsImeWanted() {
@@ -119,12 +132,25 @@ public class GameActivity extends SDLActivity {
     private boolean legacySafeMode;
     private Ut99RetroTouchBridge ut99RetroTouchBridge;
 
+    // UT99_ANDROID_PERF_A_FEATURE_CACHE:
+    // hasSystemFeature() is a binder call on Android 4.x. These checks run from
+    // input dispatch, immersive re-apply and the RetroTouch poll, so resolve
+    // each feature once per process. -1 unknown, 0 no, 1 yes.
+    private static volatile int sUt99AutomotiveState = -1;
+    private static volatile int sUt99TouchscreenState = -1;
+
     private boolean isAutomotiveDevice() {
-        try {
-            return getPackageManager().hasSystemFeature("android.hardware.type.automotive");
-        } catch (Throwable ignored) {
-            return false;
+        int state = sUt99AutomotiveState;
+        if (state < 0) {
+            boolean automotive = false;
+            try {
+                automotive = getPackageManager().hasSystemFeature("android.hardware.type.automotive");
+            } catch (Throwable ignored) {
+            }
+            state = automotive ? 1 : 0;
+            sUt99AutomotiveState = state;
         }
+        return state == 1;
     }
 
     private File resolveDataRootForGame() {
@@ -359,13 +385,8 @@ public class GameActivity extends SDLActivity {
 
         View decor = window.getDecorView();
         if (decor != null) {
-            decor.setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            // UT99_ANDROID_PERF_A_IMMERSIVE: no HIDE_NAVIGATION below API 19.
+            decor.setSystemUiVisibility(ut99ImmersiveUiFlags());
         }
     }
 
@@ -821,6 +842,14 @@ public class GameActivity extends SDLActivity {
         return null;
     }
 
+    private static String ut99V166DefaultResolutionMode() {
+        // UT99_ANDROID_PERF_A_OUYA_720P:
+        // OUYA reports a 1920x1080 display, but Tegra 3 cannot fill 1080p at a
+        // playable frame rate. Without a saved choice start OUYA at 720p; an
+        // explicit selection (including Native) is always respected.
+        return isOuyaDeviceV108() ? "1280x720" : "Native";
+    }
+
     private String ut99V166ReadResolutionMode() {
         // UT99_ANDROID_V166C_RESOLUTION_PERSIST:
         // Keep the user's selected render resolution in Android SharedPreferences as
@@ -836,7 +865,7 @@ public class GameActivity extends SDLActivity {
         }
 
         java.io.File root = getUt99ConfigRootV63();
-        if (root == null) return "Native";
+        if (root == null) return ut99V166DefaultResolutionMode();
         java.io.File systemDir = new java.io.File(root, "System");
         java.io.File[] candidates = new java.io.File[] {
                 new java.io.File(systemDir, "AndroidUT99.ini"),
@@ -858,7 +887,7 @@ public class GameActivity extends SDLActivity {
                 android.util.Log.w("UT99Android", "v166 could not read resolution mode from " + ini.getAbsolutePath(), t);
             }
         }
-        return "Native";
+        return ut99V166DefaultResolutionMode();
     }
 
     private void ut99V166WriteResolutionModePrefs(String mode) {
@@ -945,15 +974,7 @@ public class GameActivity extends SDLActivity {
             getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
             android.view.View decor = getWindow().getDecorView();
-            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            if (android.os.Build.VERSION.SDK_INT >= 19) {
-                flags |= android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-            }
-            decor.setSystemUiVisibility(flags);
+            decor.setSystemUiVisibility(ut99ImmersiveUiFlags()); // UT99_ANDROID_PERF_A_IMMERSIVE
         } catch (Throwable ignored) {
         }
     }
@@ -1040,10 +1061,18 @@ public class GameActivity extends SDLActivity {
     }
 
     boolean ut99RetroTouchHasTouchscreen() {
+        // Retroid-class handhelds expose both a touchscreen and an integrated
+        // GAMEPAD/JOYSTICK. RetroTouch must remain available there. OUYA and
+        // non-touch ChromeOS/TV devices stay clean because they report no touch.
+        if (isAutomotiveDevice()) return true;
+        final int state = sUt99TouchscreenState;
+        if (state >= 0) return state == 1;
         try {
-            if (isAutomotiveDevice()) return true;
             android.content.pm.PackageManager pm = getPackageManager();
-            return pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN);
+            final boolean touchscreen =
+                    pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN);
+            sUt99TouchscreenState = touchscreen ? 1 : 0;
+            return touchscreen;
         } catch (Throwable t) {
             return true;
         }
@@ -1101,11 +1130,8 @@ public class GameActivity extends SDLActivity {
     }
 
     private boolean ut99IsChromeOSV211() {
-        try {
-            return getPackageManager().hasSystemFeature("org.chromium.arc.device_management");
-        } catch (Throwable ignored) {
-            return false;
-        }
+        // UT99_ANDROID_PERF_A_FEATURE_CACHE: resolved once, see SDLActivity.
+        return SDLActivity.ut99IsChromeOS(this);
     }
 
     private static boolean ut99IsExternalInputDeviceV211(android.view.InputDevice device) {
@@ -1212,6 +1238,39 @@ public class GameActivity extends SDLActivity {
 
     private boolean isPhysicalMouseEventV210(android.view.MotionEvent event) {
         if (event == null) return false;
+        final int source = event.getSource();
+        // UT99_ANDROID_PERF_A_FEATURE_CACHE:
+        // Stick/trigger events are the most frequent MotionEvents on OUYA and
+        // are never a mouse. Reject them before any device lookup.
+        if ((source & android.view.InputDevice.SOURCE_CLASS_JOYSTICK)
+                == android.view.InputDevice.SOURCE_CLASS_JOYSTICK) return false;
+        final boolean chromeOS = ut99IsChromeOSV211();
+        boolean mouseLike = (source & android.view.InputDevice.SOURCE_MOUSE)
+                == android.view.InputDevice.SOURCE_MOUSE;
+        if (!mouseLike && android.os.Build.VERSION.SDK_INT >= 26
+                && (source & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
+                == android.view.InputDevice.SOURCE_MOUSE_RELATIVE) mouseLike = true;
+        // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
+        // ARC can keep SOURCE_TOUCHPAD (or combine it with SOURCE_MOUSE) on
+        // generic-motion events instead of presenting an exact SOURCE_MOUSE.
+        if (!mouseLike && chromeOS
+                && (source & android.view.InputDevice.SOURCE_TOUCHPAD)
+                == android.view.InputDevice.SOURCE_TOUCHPAD) mouseLike = true;
+        if (!mouseLike && chromeOS
+                && !isAndroidGamepadSourceV47(event)
+                && (((source & android.view.InputDevice.SOURCE_CLASS_POINTER)
+                == android.view.InputDevice.SOURCE_CLASS_POINTER)
+                || ((source & android.view.InputDevice.SOURCE_CLASS_POSITION)
+                == android.view.InputDevice.SOURCE_CLASS_POSITION))) mouseLike = true;
+        if (!mouseLike) {
+            try {
+                mouseLike = event.getPointerCount() > 0
+                        && event.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_MOUSE;
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+        if (!mouseLike) return false;
         try {
             // UT99_ANDROID_CHROMEOS_VIRTUAL_HID_BYPASS_V213:
             // ChromeOS/ARC frequently presents a physical mouse or trackpad as a
@@ -1219,34 +1278,11 @@ public class GameActivity extends SDLActivity {
             // still lets a separate click path through, producing an invisible
             // cursor that flashes only when clicked.  Keep the Retroid software
             // cursor safeguard on Android handhelds, never on confirmed ARC.
-            if (!ut99IsChromeOSV211()
+            if (!chromeOS
                     && ut99IsSoftwareVirtualDesktopDeviceV212(event.getDevice())) return false;
         } catch (Throwable ignored) {
         }
-        final int source = event.getSource();
-        if ((source & android.view.InputDevice.SOURCE_MOUSE)
-                == android.view.InputDevice.SOURCE_MOUSE) return true;
-        if (android.os.Build.VERSION.SDK_INT >= 26
-                && (source & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
-                == android.view.InputDevice.SOURCE_MOUSE_RELATIVE) return true;
-        // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
-        // ARC can keep SOURCE_TOUCHPAD (or combine it with SOURCE_MOUSE) on
-        // generic-motion events instead of presenting an exact SOURCE_MOUSE.
-        if (ut99IsChromeOSV211()
-                && (source & android.view.InputDevice.SOURCE_TOUCHPAD)
-                == android.view.InputDevice.SOURCE_TOUCHPAD) return true;
-        if (ut99IsChromeOSV211()
-                && !isAndroidGamepadSourceV47(event)
-                && (((source & android.view.InputDevice.SOURCE_CLASS_POINTER)
-                == android.view.InputDevice.SOURCE_CLASS_POINTER)
-                || ((source & android.view.InputDevice.SOURCE_CLASS_POSITION)
-                == android.view.InputDevice.SOURCE_CLASS_POSITION))) return true;
-        try {
-            return event.getPointerCount() > 0
-                    && event.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_MOUSE;
-        } catch (Throwable ignored) {
-            return false;
-        }
+        return true;
     }
 
     private static boolean ut99HasPointerCaptureV210() {
@@ -1301,7 +1337,19 @@ public class GameActivity extends SDLActivity {
                 || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_MODE;
     }
 
+    // UT99_ANDROID_PERF_A_INPUT_TRACE:
+    // Per-key/per-axis logcat lines build strings on every input event (Dalvik
+    // GC churn on OUYA). Set to true only while debugging input routing.
+    private static final boolean UT99_INPUT_TRACE = false;
+
+    // Build.* never changes at runtime; evaluated once instead of per input event.
+    private static final boolean UT99_IS_OUYA_DEVICE_V108 = computeIsOuyaDeviceV108();
+
     private static boolean isOuyaDeviceV108() {
+        return UT99_IS_OUYA_DEVICE_V108;
+    }
+
+    private static boolean computeIsOuyaDeviceV108() {
         // UT99_ANDROID_V108_OUYA_INPUT_REPAIR:
         // Keep the fixes strictly scoped to OUYA/Android 4 console-class devices
         // so Retroid/modern Android controller and touch behaviour stays unchanged.
@@ -1351,18 +1399,18 @@ public class GameActivity extends SDLActivity {
                         || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
                     // OUYA sends D-Pad through both Android key events and SDL.
                     // Let SDL own it to avoid double menu steps.
-                    android.util.Log.i("UT99Android", "UT99_ANDROID_V108_OUYA_DPAD pass-through key=" + keyCode);
+                    if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V108_OUYA_DPAD pass-through key=" + keyCode);
                     return super.dispatchKeyEvent(event);
                 }
                 if (action == android.view.KeyEvent.ACTION_DOWN && event.getRepeatCount() > 0
                         && (keyCode == android.view.KeyEvent.KEYCODE_BUTTON_START
                         || keyCode == android.view.KeyEvent.KEYCODE_MENU
                         || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_MODE)) {
-                    android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY ignored repeated START/MENU key=" + keyCode);
+                    if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY ignored repeated START/MENU key=" + keyCode);
                     return true;
                 }
                 nativeAndroidButtonV47(keyCode, action == android.view.KeyEvent.ACTION_DOWN);
-                android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY key=" + keyCode + " down=" + (action == android.view.KeyEvent.ACTION_DOWN));
+                if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY key=" + keyCode + " down=" + (action == android.view.KeyEvent.ACTION_DOWN));
                 return true;
             }
         }
@@ -1376,6 +1424,16 @@ public class GameActivity extends SDLActivity {
         // Activity/DecorView instead of the SDL Surface's generic-motion
         // listener. Route real mouse input into SDL exactly once and keep
         // MOUSE|TOUCHSCREEN devices out of RetroTouch's touch path.
+        // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE:
+        // ARC only. Elsewhere this route bypassed SDL's motion listener and its
+        // ut99V116 view->surface hover scaling, so the OUYA touchpad hovered in
+        // view coordinates but clicked in surface coordinates.
+        if (!ut99IsChromeOSV211()) {
+            if (ut99RetroTouchBridge != null && isPhysicalMouseEventV210(event)) {
+                ut99RetroTouchBridge.onHardwareDesktopInput();
+            }
+            return super.dispatchGenericMotionEvent(event);
+        }
         if (isPhysicalMouseEventV210(event)) {
             if (ut99RetroTouchBridge != null) {
                 ut99RetroTouchBridge.onHardwareDesktopInput();
@@ -1469,7 +1527,7 @@ public class GameActivity extends SDLActivity {
             nativeAndroidAxisV47(android.view.MotionEvent.AXIS_RTRIGGER, event.getAxisValue(android.view.MotionEvent.AXIS_RTRIGGER));
             nativeAndroidAxisV47(android.view.MotionEvent.AXIS_HAT_X, event.getAxisValue(android.view.MotionEvent.AXIS_HAT_X));
             nativeAndroidAxisV47(android.view.MotionEvent.AXIS_HAT_Y, event.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y));
-            android.util.Log.i("UT99Android", "UT99_ANDROID_V109_AXIS lx=" + lx
+            if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V109_AXIS lx=" + lx
                     + " ly=" + ly
                     + " rx=" + rx
                     + " ry=" + ry
@@ -1479,30 +1537,31 @@ public class GameActivity extends SDLActivity {
         return super.onGenericMotionEvent(event);
     }
 
+    // UT99_ANDROID_PERF_A_IMMERSIVE:
+    // Android < 4.4 (API 19) has no IMMERSIVE_STICKY. There
+    // SYSTEM_UI_FLAG_HIDE_NAVIGATION makes the system place a full-screen input
+    // consumer above the app that swallows the next pointer event (OUYA
+    // touchpad hover/click) and then clears the flags again. Re-applying it
+    // after every change grew into hundreds of window relayouts per second on
+    // OUYA. Below API 19 the window FLAG_FULLSCREEN hides the status bar on its
+    // own (OUYA has no navigation bar), which is also what stock SDL does.
+    private static int ut99ImmersiveUiFlags() {
+        int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+        if (android.os.Build.VERSION.SDK_INT >= 19) {
+            flags |= android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+        }
+        return flags;
+    }
+
     // UT99_ANDROID_V50_IMMERSIVE
     private void ut99V50Immersive() {
         if (isAutomotiveDevice()) return;
-        try {
-            getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            android.view.View decor = getWindow().getDecorView();
-            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            if (android.os.Build.VERSION.SDK_INT >= 19) {
-                flags |= android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-            }
-            decor.setSystemUiVisibility(flags);
-            // UT99_ANDROID_V72_UI_EDIT_FOCUS_KEYBOARD:
-            // Do not hide the IME from immersive re-apply. SDL_StopTextInput()
-            // is now responsible for closing it when the user taps outside an
-            // edit field.
-            android.util.Log.i("UT99Android", "UT99_ANDROID_V50_IMMERSIVE");
-        } catch (Throwable t) {
-            android.util.Log.e("UT99Android", "v50 immersive failed", t);
-        }
+        ut99V52HardImmersive();
+        android.util.Log.i("UT99Android", "UT99_ANDROID_V50_IMMERSIVE");
     }
 
 
@@ -1510,30 +1569,46 @@ public class GameActivity extends SDLActivity {
 
     // UT99_ANDROID_V52_IMMERSIVE_HARD
     private android.os.Handler ut99V52Handler;
+    private boolean ut99V52ListenerInstalled;
+    private boolean ut99V52InsetsApplied;
+    private final Runnable ut99V52ImmersiveCheck = new Runnable() {
+        @Override public void run() { ut99V52HardImmersive(); }
+    };
 
     private void ut99V52HardImmersive() {
         if (isAutomotiveDevice()) return;
         try {
+            // UT99_ANDROID_PERF_A_IMMERSIVE:
+            // Idempotent: Window.setFlags()/setAttributes() always trigger a
+            // window relayout, even for unchanged values, so only touch what is
+            // actually missing.
             final android.view.Window w = getWindow();
-            w.setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            if (android.os.Build.VERSION.SDK_INT >= 28) {
-                android.view.WindowManager.LayoutParams lp = w.getAttributes();
+            if (w == null) return;
+            boolean changed = false;
+            final android.view.WindowManager.LayoutParams lp = w.getAttributes();
+            final int windowFlags = android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
+                    | android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+            if ((lp.flags & windowFlags) != windowFlags) {
+                w.addFlags(windowFlags);
+                changed = true;
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 28
+                    && lp.layoutInDisplayCutoutMode
+                    != android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
                 lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                 w.setAttributes(lp);
+                changed = true;
             }
 
             final android.view.View decor = w.getDecorView();
-            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            decor.setSystemUiVisibility(flags);
+            final int flags = ut99ImmersiveUiFlags();
+            final boolean uiFlagsMissing = (decor.getSystemUiVisibility() & flags) != flags;
+            if (uiFlagsMissing) {
+                decor.setSystemUiVisibility(flags);
+                changed = true;
+            }
 
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
+            if (android.os.Build.VERSION.SDK_INT >= 30 && (uiFlagsMissing || !ut99V52InsetsApplied)) {
                 try {
                     w.setDecorFitsSystemWindows(false);
                     android.view.WindowInsetsController c = decor.getWindowInsetsController();
@@ -1541,44 +1616,54 @@ public class GameActivity extends SDLActivity {
                         c.hide(android.view.WindowInsets.Type.statusBars() | android.view.WindowInsets.Type.navigationBars());
                         c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                     }
+                    ut99V52InsetsApplied = true;
                 } catch (Throwable ignored) {}
             }
 
-            // UT99_ANDROID_V76_KEYBOARD_START_SAFE:
-            // Keep the soft keyboard alive only while native UWindow edit handling requested it.
-            ut99V76HideImeUnlessRequested();
+            // UT99_ANDROID_V76_KEYBOARD_START_SAFE: stale IME hiding no longer
+            // rides on every immersive pass; see ut99SetImeWanted()/onResume.
 
-            if (java.lang.System.currentTimeMillis() % 1000 < 40) if (java.lang.System.currentTimeMillis() % 1000 < 40) android.util.Log.i("UT99Android", "UT99_ANDROID_V52_IMMERSIVE_HARD"); /* UT99_ANDROID_V54_REDUCE_IMMERSIVE_LOG_SPAM */ /* UT99_ANDROID_V54_REDUCE_IMMERSIVE_LOG_SPAM */
+            if (changed) {
+                android.util.Log.i("UT99Android", "UT99_ANDROID_V52_IMMERSIVE_HARD reapplied ui=0x"
+                        + Integer.toHexString(flags));
+            }
         } catch (Throwable t) {
             android.util.Log.e("UT99Android", "v52 immersive failed", t);
         }
     }
 
-    private void ut99V52ScheduleImmersive() {
-        if (isAutomotiveDevice()) return;
+    private void ut99V52RequestImmersiveCheck(long delayMs) {
         if (ut99V52Handler == null) {
             ut99V52Handler = new android.os.Handler(android.os.Looper.getMainLooper());
         }
+        // Coalesced: there is never more than one pending check.
+        ut99V52Handler.removeCallbacks(ut99V52ImmersiveCheck);
+        ut99V52Handler.postDelayed(ut99V52ImmersiveCheck, delayMs);
+    }
+
+    private void ut99V52ScheduleImmersive() {
+        if (isAutomotiveDevice()) return;
         ut99V52HardImmersive();
-        final int[] delays = new int[]{50, 150, 350, 750, 1500, 3000};
-        for (int d : delays) {
-            ut99V52Handler.postDelayed(new Runnable() {
-                @Override public void run() { ut99V52HardImmersive(); }
-            }, d);
-        }
-        try {
-            getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(
-                new android.view.View.OnSystemUiVisibilityChangeListener() {
-                    @Override public void onSystemUiVisibilityChange(int visibility) {
-                        if (ut99V52Handler != null) {
-                            ut99V52Handler.postDelayed(new Runnable() {
-                                @Override public void run() { ut99V52HardImmersive(); }
-                            }, 80);
+        // One deferred re-check catches bars the system re-shows asynchronously
+        // after focus/resume. It only re-applies if something was really lost.
+        ut99V52RequestImmersiveCheck(500);
+        if (!ut99V52ListenerInstalled) {
+            try {
+                getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(
+                    new android.view.View.OnSystemUiVisibilityChangeListener() {
+                        @Override public void onSystemUiVisibilityChange(int visibility) {
+                            final boolean lost = (visibility & android.view.View.SYSTEM_UI_FLAG_FULLSCREEN) == 0
+                                    || (android.os.Build.VERSION.SDK_INT >= 19
+                                    && (visibility & android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0);
+                            if (lost) {
+                                ut99V52RequestImmersiveCheck(300);
+                            }
                         }
                     }
-                }
-            );
-        } catch (Throwable ignored) {}
+                );
+                ut99V52ListenerInstalled = true;
+            } catch (Throwable ignored) {}
+        }
     }
 
 
@@ -1656,7 +1741,11 @@ public class GameActivity extends SDLActivity {
     public void onUserInteraction() {
         /* UT99_ANDROID_V56_INPUT_SAFE_FIXED_SURFACE: disabled v55 userInteraction surface reapply */
         super.onUserInteraction();
-        ut99V52ScheduleImmersive(); // v52 userInteraction
+        // UT99_ANDROID_PERF_A_IMMERSIVE: one coalesced, idempotent check instead
+        // of an immediate re-apply plus six delayed ones for every input event.
+        if (!isAutomotiveDevice()) {
+            ut99V52RequestImmersiveCheck(500); // v52 userInteraction
+        }
     }
 
 
@@ -1902,10 +1991,12 @@ public class GameActivity extends SDLActivity {
         // RetroTouch must see the current native menu state before a fresh pointer
         // is dispatched, otherwise the first UWindow tap after opening a menu can
         // be consumed by a stale GAMEPLAY mode.
-        if (ut99RetroTouchBridge != null && isPhysicalMouseEventV210(ev)) {
-            ut99RetroTouchBridge.onHardwareDesktopInput();
-        } else if (ut99RetroTouchBridge != null) {
-            ut99RetroTouchBridge.beforeHostTouch(ev);
+        if (ut99RetroTouchBridge != null) {
+            if (isPhysicalMouseEventV210(ev)) {
+                ut99RetroTouchBridge.onHardwareDesktopInput();
+            } else {
+                ut99RetroTouchBridge.beforeHostTouch(ev);
+            }
         }
         // v60: no low-res touch rescaling. Touch/mouse events stay in native
         // SurfaceView coordinates so SDL and Unreal see the same drawable size.
@@ -1925,6 +2016,17 @@ public class GameActivity extends SDLActivity {
             // a RetroTouch target, therefore do not add the overlay View at all.
             if (ut99IsChromeOSV211()) {
                 Log.i(TAG, "UT99_ANDROID_CHROMEOS_NO_OVERLAY_VIEW_V215 skipped RetroTouch attachment");
+                return;
+            }
+            // UT99_ANDROID_PERF_A_RETROTOUCH_TOUCH_ONLY:
+            // The overlay can only ever become visible on a touchscreen device.
+            // Without one (OUYA, Android TV) the bridge only polled the native
+            // state every 50 ms, queried PackageManager and re-read up to four INI
+            // files every 650 ms on the UI thread for the whole session.
+            // OUYA reports FEATURE_TOUCHSCREEN although it only has the
+            // controller touchpad, so exclude it explicitly.
+            if (!ut99RetroTouchHasTouchscreen() || isOuyaDeviceV108()) {
+                Log.i(TAG, "UT99_ANDROID_PERF_A_RETROTOUCH_TOUCH_ONLY skipped RetroTouch attachment: no real touchscreen");
                 return;
             }
             ut99V91EnsureTouchOverlayConfigDefault();

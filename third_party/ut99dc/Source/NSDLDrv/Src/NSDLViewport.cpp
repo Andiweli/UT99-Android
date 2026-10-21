@@ -579,22 +579,108 @@ static UBOOL UT99AndroidSetFloatPropertyV91( UObject* Obj, const TCHAR* Name, FL
     return 1;
 }
 
+// UT99_ANDROID_PERF_A_MENU_CONSOLE:
+// The menu helpers used to find the console with a full TObjectIterator scan,
+// several times per frame. The class name test never matched the real console
+// (UTMenu.UTConsole); it hit UWindowConsoleWindow instead, so MouseX/MouseY were
+// never written and clicks used the cursor position of the previous render.
+// Read the console straight from the active viewport and cache the property
+// offsets per class.
+static UViewport* GUT99AndroidMenuViewportPerfA = NULL;
+static UClass* GUT99AndroidConsoleClassPerfA = NULL;
+static UBOOL GUT99AndroidConsoleIsWindowPerfA = 0;
+static UObjectProperty* GUT99AndroidConsoleRootPropPerfA = NULL;
+static UFloatProperty* GUT99AndroidConsoleMouseXPropPerfA = NULL;
+static UFloatProperty* GUT99AndroidConsoleMouseYPropPerfA = NULL;
+static UClass* GUT99AndroidRootClassPerfA = NULL;
+static UFloatProperty* GUT99AndroidRootScalePropPerfA = NULL;
+
+static UProperty* UT99AndroidFindClassPropertyPerfA( UClass* Class, const TCHAR* Name, UClass* PropClass )
+{
+    if( !Class || !Name )
+        return NULL;
+    for( TFieldIterator<UProperty> It( Class ); It; ++It )
+    {
+        UProperty* Prop = *It;
+        if( Prop && appStricmp( Prop->GetName(), Name ) == 0 && Prop->IsA( PropClass ) )
+            return Prop;
+    }
+    return NULL;
+}
+
+static UObject* UT99AndroidWindowConsolePerfA()
+{
+    UViewport* Viewport = GUT99AndroidMenuViewportPerfA;
+    UObject* Console = Viewport ? (UObject*)Viewport->Console : NULL;
+    if( !Console || !Console->GetClass() )
+        return NULL;
+
+    UClass* Class = Console->GetClass();
+    if( Class != GUT99AndroidConsoleClassPerfA )
+    {
+        GUT99AndroidConsoleClassPerfA = Class;
+        GUT99AndroidConsoleIsWindowPerfA = 0;
+        for( UClass* Cls = Class; Cls; Cls = Cls->GetSuperClass() )
+        {
+            const TCHAR* ClassName = Cls->GetName();
+            if( ClassName && appStrstr( ClassName, TEXT("WindowConsole") ) )
+            {
+                GUT99AndroidConsoleIsWindowPerfA = 1;
+                break;
+            }
+        }
+        GUT99AndroidConsoleRootPropPerfA = (UObjectProperty*)UT99AndroidFindClassPropertyPerfA( Class, TEXT("Root"), UObjectProperty::StaticClass() );
+        GUT99AndroidConsoleMouseXPropPerfA = (UFloatProperty*)UT99AndroidFindClassPropertyPerfA( Class, TEXT("MouseX"), UFloatProperty::StaticClass() );
+        GUT99AndroidConsoleMouseYPropPerfA = (UFloatProperty*)UT99AndroidFindClassPropertyPerfA( Class, TEXT("MouseY"), UFloatProperty::StaticClass() );
+        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_PERF_A_MENU_CONSOLE class=%s window=%d root=%d mouse=%d",
+            TCHAR_TO_ANSI(Class->GetName()), GUT99AndroidConsoleIsWindowPerfA ? 1 : 0,
+            GUT99AndroidConsoleRootPropPerfA ? 1 : 0,
+            ( GUT99AndroidConsoleMouseXPropPerfA && GUT99AndroidConsoleMouseYPropPerfA ) ? 1 : 0 );
+    }
+    return GUT99AndroidConsoleIsWindowPerfA ? Console : NULL;
+}
+
+static UObject* UT99AndroidUWindowRootPerfA()
+{
+    UObject* Console = UT99AndroidWindowConsolePerfA();
+    if( !Console || !GUT99AndroidConsoleRootPropPerfA )
+        return NULL;
+    UObject* Root = NULL;
+    appMemcpy( &Root, (BYTE*)Console + GUT99AndroidConsoleRootPropPerfA->Offset, sizeof(Root) );
+    return Root;
+}
+
+static FLOAT UT99AndroidUWindowScalePerfA( UObject* Root )
+{
+    if( !Root || !Root->GetClass() )
+        return 1.0f;
+    if( Root->GetClass() != GUT99AndroidRootClassPerfA )
+    {
+        GUT99AndroidRootClassPerfA = Root->GetClass();
+        GUT99AndroidRootScalePropPerfA = (UFloatProperty*)UT99AndroidFindClassPropertyPerfA( Root->GetClass(), TEXT("GUIScale"), UFloatProperty::StaticClass() );
+    }
+    if( !GUT99AndroidRootScalePropPerfA )
+        return 1.0f;
+    const FLOAT Scale = *(FLOAT*)((BYTE*)Root + GUT99AndroidRootScalePropPerfA->Offset);
+    return Scale < 0.25f ? 1.0f : Scale;
+}
+
+static UBOOL UT99AndroidSetConsoleMouseUIPerfA( FLOAT UIX, FLOAT UIY )
+{
+    UObject* Console = UT99AndroidWindowConsolePerfA();
+    if( !Console || !GUT99AndroidConsoleMouseXPropPerfA || !GUT99AndroidConsoleMouseYPropPerfA )
+        return 0;
+    *(FLOAT*)((BYTE*)Console + GUT99AndroidConsoleMouseXPropPerfA->Offset) = UIX;
+    *(FLOAT*)((BYTE*)Console + GUT99AndroidConsoleMouseYPropPerfA->Offset) = UIY;
+    return 1;
+}
+
 static UBOOL UT99AndroidSetWindowConsoleMouseV91( FLOAT X, FLOAT Y )
 {
-    UBOOL Updated = 0;
-    for( TObjectIterator<UObject> It; It; ++It )
-    {
-        UObject* Obj = *It;
-        if( !Obj || !Obj->GetClass() )
-            continue;
-        const TCHAR* ClassName = Obj->GetClass()->GetName();
-        if( !ClassName || !appStrstr( ClassName, TEXT("WindowConsole") ) )
-            continue;
-        UBOOL A = UT99AndroidSetFloatPropertyV91( Obj, TEXT("MouseX"), X );
-        UBOOL B = UT99AndroidSetFloatPropertyV91( Obj, TEXT("MouseY"), Y );
-        Updated = Updated || (A && B);
-    }
-    return Updated;
+    // X/Y are viewport pixels; WindowConsole.MouseX/MouseY are UWindow units,
+    // exactly as RenderUWindow() derives them from WindowsMouseX/GUIScale.
+    const FLOAT Scale = UT99AndroidUWindowScalePerfA( UT99AndroidUWindowRootPerfA() );
+    return UT99AndroidSetConsoleMouseUIPerfA( X / Scale, Y / Scale );
 }
 
 static UBOOL UT99AndroidIsNativeMouseEventV110( Uint32 Which )
@@ -619,6 +705,10 @@ static DOUBLE GUT99V111LastGameplayMotionLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE
 static DOUBLE GUT99V111LastSuppressTouchLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_GAMEPLAY_V111
 static UBOOL GUT99V113NativeMouseSeen = 0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
 static UBOOL GUT99V113NativeMouseCaptureActive = 0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
+// UT99_ANDROID_PERF_A_CAPTURE_RETRY: gameplay with a known native mouse. Keeps
+// synthetic touch suppressed in gameplay even where relative capture is
+// unsupported (OUYA), as 2.2.0 did by claiming capture unconditionally.
+static UBOOL GUT99V113NativeMouseGameplayModePerfA = 0;
 static DOUBLE GUT99V113LastRelativeMotionLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
 // UT99_ANDROID_CHROMEOS_MOUSE_FRAMEPACED_FLOAT_V210
 // Parallel SDL Android event carrying 20.12 fixed-point relative mouse motion.
@@ -629,39 +719,52 @@ static UBOOL GUT99V115MenuButtonDownValid[8] = {0,0,0,0,0,0,0,0}; // UT99_ANDROI
 static INT GUT99V115MenuButtonDownX[8] = {0,0,0,0,0,0,0,0}; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 static INT GUT99V115MenuButtonDownY[8] = {0,0,0,0,0,0,0,0}; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 static DOUBLE GUT99V115LastSuppressTouchLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
-static DOUBLE GUT99V169KMenuPointerVisibleUntil = 0.0; // UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE
-static UBOOL  GUT99V169KMenuPointerNative = 0; // UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE
-static DOUBLE GUT99V169KMenuPointerLastLog = 0.0; // UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE
+// UT99_ANDROID_PERF_A_MENU_POINTER:
+// One menu pointer owner at a time. v169k expired a visible mouse/stick
+// pointer after 3 s and then re-parked it in the screen centre on every frame
+// (two object scans per frame), so a touchpad or R1 click after a short pause
+// hit the centre instead of the control under the cursor. A mouse or stick
+// pointer now stays where the user left it; touch parks it once.
+enum
+{
+    UT99_MENU_POINTER_NONE   = 0, // menu opened, no pointer input yet
+    UT99_MENU_POINTER_TOUCH  = 1, // direct finger taps, no cursor
+    UT99_MENU_POINTER_NATIVE = 2, // HID/BT mouse or OUYA touchpad, system cursor
+    UT99_MENU_POINTER_STICK  = 3, // left stick + R1, UWindow software cursor
+};
+static INT GUT99AndroidMenuPointerModePerfA = UT99_MENU_POINTER_NONE;
+static UBOOL GUT99AndroidMenuPointerParkPendingPerfA = 1;
+// R1 / right shoulder click request; resolved in UNSDLViewport::TickInput()
+// after the pointer has been synchronised with UWindow.
+static UBOOL GUT99AndroidMenuClickRequestPerfA = 0;
+static UBOOL GUT99AndroidMenuActiveLastPerfA = 0;
+static DOUBLE GUT99AndroidStickCursorLastTimePerfA = 0.0;
+
+static void UT99AndroidMenuPointerSetModePerfA( INT Mode, const char* Source )
+{
+    if( Mode == UT99_MENU_POINTER_NONE || Mode == UT99_MENU_POINTER_TOUCH )
+        GUT99AndroidMenuPointerParkPendingPerfA = 1;
+    if( Mode == GUT99AndroidMenuPointerModePerfA )
+        return;
+    GUT99AndroidMenuPointerModePerfA = Mode;
+    SDL_ShowCursor( Mode == UT99_MENU_POINTER_NATIVE ? SDL_ENABLE : SDL_DISABLE );
+    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_PERF_A_MENU_POINTER mode=%d source=%s", Mode, Source ? Source : "?" );
+}
 
 static void UT99AndroidMenuPointerActivityV169K( UBOOL bNativePointer, const char* Source )
 {
-    // UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE:
-    // Menu touch must not inherit the old visible mouse cursor/hover target.
-    // Only a real HID/BT mouse or the virtual left-stick mouse makes a cursor
-    // visible/active, and that visibility expires after a short idle window.
-    GUT99V169KMenuPointerVisibleUntil = appSeconds() + 3.00;
-    GUT99V169KMenuPointerNative = bNativePointer ? 1 : 0;
-    if( bNativePointer )
-        SDL_ShowCursor( SDL_ENABLE );
-
-    DOUBLE Now = appSeconds();
-    if( Now - GUT99V169KMenuPointerLastLog > 0.80 )
-    {
-        GUT99V169KMenuPointerLastLog = Now;
-        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE pointer active source=%s native=%d", Source ? Source : "?", bNativePointer ? 1 : 0 );
-    }
+    UT99AndroidMenuPointerSetModePerfA( bNativePointer ? UT99_MENU_POINTER_NATIVE : UT99_MENU_POINTER_STICK, Source );
 }
 
 static UBOOL UT99AndroidMenuPointerVisibleV169K()
 {
-    return appSeconds() <= GUT99V169KMenuPointerVisibleUntil ? 1 : 0;
+    return GUT99AndroidMenuPointerModePerfA == UT99_MENU_POINTER_NATIVE
+        || GUT99AndroidMenuPointerModePerfA == UT99_MENU_POINTER_STICK;
 }
 
 static void UT99AndroidMenuPointerTouchModeV169K()
 {
-    GUT99V169KMenuPointerVisibleUntil = 0.0;
-    GUT99V169KMenuPointerNative = 0;
-    SDL_ShowCursor( SDL_DISABLE );
+    UT99AndroidMenuPointerSetModePerfA( UT99_MENU_POINTER_TOUCH, "touch" );
 }
 
 static DWORD UT99AndroidMouseButtonFlagsV110( Uint8 Button )
@@ -753,7 +856,7 @@ static UBOOL UT99AndroidShouldSuppressSyntheticTouchV111()
     const DOUBLE Now = appSeconds();
     if( Now < GUT99V111SuppressSyntheticTouchUntil )
         return 1;
-    if( GUT99V113NativeMouseCaptureActive && GUT99V113NativeMouseSeen )
+    if( ( GUT99V113NativeMouseCaptureActive || GUT99V113NativeMouseGameplayModePerfA ) && GUT99V113NativeMouseSeen )
         return 1;
     if( GUT99V115LastNativeMouseActivity > 0.0 && ( Now - GUT99V115LastNativeMouseActivity ) < 2.50 )
         return 1;
@@ -814,8 +917,57 @@ static void UT99AndroidNativeMouseGameplayMotionV111( UNSDLViewport* Viewport, I
     }
 }
 
+// UT99_ANDROID_PERF_A_EDIT_TARGET_IME:
+// Keyboard decisions follow the exact UWindow hit-test of the click. The edit
+// box under the pointer is remembered on button-down (mouse, touchpad, touch
+// or R1) and the IME opens only once that box reports keyboard focus. The old
+// pixel bands (v84/v112/v169k) were tuned for one resolution: they missed
+// fields elsewhere and raised the keyboard on checkboxes.
+static UObject* GUT99AndroidImeCandidatePerfA = NULL;
+static INT GUT99AndroidImeCandidateIndexPerfA = INDEX_NONE;
+static UObject* GUT99AndroidImePendingPerfA = NULL;
+static INT GUT99AndroidImePendingIndexPerfA = INDEX_NONE;
+static UObject* GUT99AndroidImeTargetPerfA = NULL;
+static INT GUT99AndroidImeTargetIndexPerfA = INDEX_NONE;
+static DOUBLE GUT99V112PendingKeyboardUntil = 0.0;
+static INT    GUT99V112PendingKeyboardX = 0;
+static INT    GUT99V112PendingKeyboardY = 0;
+
+static UBOOL UT99AndroidObjectAlivePerfA( UObject* Obj, INT Index )
+{
+    // UWindow controls are UObjects; a level change can collect them between
+    // the click and the delayed focus check, so validate the stored slot.
+    return Obj && Index != INDEX_NONE && UObject::GetIndexedObject( Index ) == Obj
+        && !( Obj->GetFlags() & ( RF_Unreachable | RF_Destroyed ) );
+}
+
+static UBOOL UT99AndroidWindowIsVisiblePerfA( UObject* Obj )
+{
+    // UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218:
+    // Closed UWindow pages can retain bHasKeyboardFocus.
+    UFunction* VisibleFn = Obj ? Obj->FindFunction( FName(TEXT("WindowIsVisible"), FNAME_Find) ) : NULL;
+    if( !VisibleFn )
+        return Obj ? 1 : 0;
+    struct FVisibleParms
+    {
+        DWORD ReturnValue;
+    } VisibleParms;
+    VisibleParms.ReturnValue = 0;
+    Obj->ProcessEvent( VisibleFn, &VisibleParms );
+    return VisibleParms.ReturnValue ? 1 : 0;
+}
+
+static UBOOL UT99AndroidEditBoxAcceptsTextPerfA( UObject* Obj )
+{
+    return Obj
+        && UT99AndroidGetBoolPropertyV79( Obj, TEXT("bCanEdit"), 1 )
+        && UT99AndroidWindowIsVisiblePerfA( Obj );
+}
+
 static UObject* UT99AndroidFocusedEditBoxObjectV83()
 {
+    // Fallback only: a full object scan for the focused edit box. Normal text
+    // entry uses the edit box the IME was opened for.
     for( TObjectIterator<UObject> It; It; ++It )
     {
         UObject* Obj = *It;
@@ -829,171 +981,85 @@ static UObject* UT99AndroidFocusedEditBoxObjectV83()
             continue;
         if( !UT99AndroidGetBoolPropertyV79( Obj, TEXT("bHasKeyboardFocus"), 0 ) )
             continue;
-        if( !UT99AndroidGetBoolPropertyV79( Obj, TEXT("bCanEdit"), 1 ) )
+        if( !UT99AndroidEditBoxAcceptsTextPerfA( Obj ) )
             continue;
-
-        // UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218:
-        // Closed UWindow pages can retain bHasKeyboardFocus. The old global
-        // iterator could therefore select a hidden NameEditBox while the live
-        // Mouse Sensitivity UWindowEditBox was focused on another page.
-        UFunction* VisibleFn = Obj->FindFunction( FName(TEXT("WindowIsVisible"), FNAME_Find) );
-        if( VisibleFn )
-        {
-            struct FVisibleParms
-            {
-                DWORD ReturnValue;
-            } VisibleParms;
-            VisibleParms.ReturnValue = 0;
-            Obj->ProcessEvent( VisibleFn, &VisibleParms );
-            if( !VisibleParms.ReturnValue )
-                continue;
-        }
         return Obj;
     }
     return NULL;
 }
 
-static UBOOL UT99AndroidFocusedEditBoxClassContainsV169K( const TCHAR* Needle )
+static UObject* UT99AndroidTextTargetEditBoxPerfA()
 {
-    UObject* Obj = UT99AndroidFocusedEditBoxObjectV83();
-    if( !Obj || !Obj->GetClass() || !Needle )
-        return 0;
-    const TCHAR* ClassName = Obj->GetClass()->GetName();
-    return ( ClassName && appStrstr( ClassName, Needle ) ) ? 1 : 0;
+    if( UT99AndroidObjectAlivePerfA( GUT99AndroidImeTargetPerfA, GUT99AndroidImeTargetIndexPerfA )
+     && UT99AndroidGetBoolPropertyV79( GUT99AndroidImeTargetPerfA, TEXT("bHasKeyboardFocus"), 0 ) )
+        return GUT99AndroidImeTargetPerfA;
+    return UT99AndroidFocusedEditBoxObjectV83();
 }
 
-static UBOOL UT99AndroidFocusedEditBoxWantsKeyboardV79()
+static void UT99AndroidSetImeCandidatePerfA( UObject* EditBox )
 {
-    UObject* Obj = UT99AndroidFocusedEditBoxObjectV83();
-    if( Obj && Obj->GetClass() )
-    {
-        UT99_ANDROID_SDL_LOGI( "v79 focused editable UWindow editbox=%s", TCHAR_TO_ANSI(Obj->GetClass()->GetName()) );
-        return 1;
-    }
-    return 0;
+    GUT99AndroidImeCandidatePerfA = EditBox;
+    GUT99AndroidImeCandidateIndexPerfA = EditBox ? (INT)EditBox->GetIndex() : INDEX_NONE;
 }
 
-// UT99_ANDROID_V84_EDIT_FIELD_CLICK_GUARD:
-// v83 correctly inserted text, but a stale NameEditBox focus could survive when
-// leaving the player-name screen.  The next non-text screen then opened the
-// Android IME again.  Keep the real edit-focus check, but additionally require
-// the last click to be in the plausible edit-field area for known stale-prone
-// controls.
-static UBOOL UT99AndroidFocusedEditBoxWantsKeyboardAtV84( INT X, INT Y )
+static UBOOL UT99AndroidShowImeForEditBoxPerfA( UObject* EditBox, INT X, INT Y, const char* Source )
 {
-    UObject* Obj = UT99AndroidFocusedEditBoxObjectV83();
-    if( !Obj || !Obj->GetClass() )
+    if( !UT99AndroidGetBoolPropertyV79( EditBox, TEXT("bHasKeyboardFocus"), 0 ) )
         return 0;
-
-    const TCHAR* ClassName = Obj->GetClass()->GetName();
-    if( !ClassName )
-        return 0;
-
-    if( appStrstr( ClassName, TEXT("NameEditBox") ) )
-    {
-        if( X < 110 || X > 650 || Y < 145 || Y > 305 )
-        {
-            UT99_ANDROID_SDL_LOGI( "v84 stale NameEditBox focus ignored x=%d y=%d", X, Y );
-            return 0;
-        }
-    }
-    else if( Y > 500 )
-    {
-        UT99_ANDROID_SDL_LOGI( "v84 editbox focus ignored on bottom action area class=%s x=%d y=%d", TCHAR_TO_ANSI(ClassName), X, Y );
-        return 0;
-    }
-
-    UT99_ANDROID_SDL_LOGI( "v84 focused editable UWindow editbox=%s x=%d y=%d", TCHAR_TO_ANSI(ClassName), X, Y );
+    GUT99AndroidImeTargetPerfA = EditBox;
+    GUT99AndroidImeTargetIndexPerfA = (INT)EditBox->GetIndex();
+    UT99AndroidShowSoftKeyboardV44( NULL, X, Y );
+    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_PERF_A_EDIT_TARGET_IME showed keyboard source=%s class=%s x=%d y=%d",
+        Source ? Source : "menu", EditBox->GetClass() ? TCHAR_TO_ANSI(EditBox->GetClass()->GetName()) : "?", X, Y );
     return 1;
 }
 
-static UBOOL UT99AndroidLikelyEditFieldClickV112( INT X, INT Y )
-{
-    // UT99_ANDROID_V112_IME_EXACT_EDIT_ONLY:
-    // v110 was intentionally broad to rescue OUYA text fields, but it also
-    // raised the keyboard on checkboxes.  Keep only real text-entry bands and
-    // never treat the left-side checkbox/list area as text input.
-    if( Y < 36 || Y > 520 || X < 90 || X > 980 )
-        return 0;
-
-    if( X < 360 && Y > 135 )
-        return 0;
-
-    if( X >= 115 && X <= 720 && Y >= 45 && Y <= 185 )
-        return 1;
-
-    if( X >= 500 && X <= 960 && Y >= 70 && Y <= 470 )
-        return 1;
-
-    return 0;
-}
-
-static DOUBLE GUT99V112PendingKeyboardUntil = 0.0;
-static INT    GUT99V112PendingKeyboardX = 0;
-static INT    GUT99V112PendingKeyboardY = 0;
-// UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME:
-// Preserve whether the UWindow hit-test itself identified the finger target as
-// an EditBox. This is more reliable than fixed screen-coordinate bands and
-// still cannot trigger the IME for checkboxes, sliders, tabs or scrollbars.
-static UBOOL  GUT99V170BLastTouchWasEditTarget = 0;
-static UBOOL  GUT99V170BPendingKeyboardFromEditTarget = 0;
-
 static void UT99AndroidShowKeyboardForClickedEditV110( SDL_Window* Window, INT X, INT Y, const char* Source )
 {
-    // UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME:
-    // The old coordinate-only heuristic excluded valid right-side edit controls
-    // such as the Mouse Sensitivity value at 1920x1080 (X > 980). When direct
-    // UWindow touch dispatch says the tapped object is an EditBox, trust that
-    // exact hit-test and only use the legacy bands as a fallback for old paths.
-    const UBOOL bExactEditTargetV170B = GUT99V170BLastTouchWasEditTarget;
-    GUT99V170BLastTouchWasEditTarget = 0;
+    (void)Window;
+    UObject* EditBox = UT99AndroidObjectAlivePerfA( GUT99AndroidImeCandidatePerfA, GUT99AndroidImeCandidateIndexPerfA )
+        ? GUT99AndroidImeCandidatePerfA : NULL;
+    UT99AndroidSetImeCandidatePerfA( NULL );
+    GUT99V112PendingKeyboardUntil = 0.0;
+    GUT99AndroidImePendingPerfA = NULL;
+    GUT99AndroidImePendingIndexPerfA = INDEX_NONE;
 
-    const UBOOL bFocusedEditV170B = bExactEditTargetV170B
-        ? UT99AndroidFocusedEditBoxWantsKeyboardV79()
-        : UT99AndroidFocusedEditBoxWantsKeyboardAtV84( X, Y );
-    const UBOOL bLikelyEditClickV169K = UT99AndroidLikelyEditFieldClickV112( X, Y );
-    const UBOOL bStartUTNameEditV169K = UT99AndroidFocusedEditBoxClassContainsV169K( TEXT("NameEditBox") )
-        && X >= 90 && X <= 760 && Y >= 135 && Y <= 345;
-    // UT99_ANDROID_CHROMEOS_NUMERIC_EDIT_V218:
-    // A native mouse already went through UWindow's own hit-test before this
-    // function is called. A visible focused EditBox is therefore authoritative
-    // and avoids the old fixed X<=980 heuristic, which excluded the right-side
-    // Mouse Sensitivity control on wide Chromebook displays.
-    const UBOOL bNativeMouseFocusedEditV218 = Source && strstr( Source, "native-mouse" )
-        && bFocusedEditV170B;
-    const UBOOL bEditClickV170B = bExactEditTargetV170B || bLikelyEditClickV169K
-        || bStartUTNameEditV169K || bNativeMouseFocusedEditV218;
+    if( EditBox && UT99AndroidEditBoxAcceptsTextPerfA( EditBox ) )
+    {
+        if( !UT99AndroidShowImeForEditBoxPerfA( EditBox, X, Y, Source ) )
+        {
+            // UWindow can move keyboard focus one frame after the click,
+            // most notably on OUYA. TickInput re-checks this one box.
+            GUT99AndroidImePendingPerfA = EditBox;
+            GUT99AndroidImePendingIndexPerfA = (INT)EditBox->GetIndex();
+            GUT99V112PendingKeyboardX = X;
+            GUT99V112PendingKeyboardY = Y;
+            GUT99V112PendingKeyboardUntil = appSeconds() + 0.75;
+        }
+        return;
+    }
 
-    if( bFocusedEditV170B && bEditClickV170B )
+    // UT99_ANDROID_V113_OUYA_CHECKBOX_TOUCHPAD_FIX:
+    // Only stop text input when the IME is really open; StopTextInput after
+    // every click can defocus UWindow controls on Android 4.x.
+    if( GUT99AndroidImeOpenV79 )
+    {
+        UT99AndroidHideSoftKeyboardV72();
+        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_PERF_A_EDIT_TARGET_IME hid keyboard for non-edit %s click x=%d y=%d", Source ? Source : "menu", X, Y );
+    }
+}
+
+static void UT99AndroidTickPendingKeyboardPerfA()
+{
+    if( GUT99V112PendingKeyboardUntil <= 0.0 )
+        return;
+    if( appSeconds() > GUT99V112PendingKeyboardUntil
+     || !UT99AndroidObjectAlivePerfA( GUT99AndroidImePendingPerfA, GUT99AndroidImePendingIndexPerfA )
+     || UT99AndroidShowImeForEditBoxPerfA( GUT99AndroidImePendingPerfA, GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY, "delayed-focus" ) )
     {
         GUT99V112PendingKeyboardUntil = 0.0;
-        GUT99V170BPendingKeyboardFromEditTarget = 0;
-        UT99AndroidShowSoftKeyboardV44( Window, X, Y );
-        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V218_EXACT_EDIT_TARGET_IME showed keyboard source=%s x=%d y=%d exact=%d nativeFocused=%d namebox=%d ouya=%d", Source ? Source : "menu", X, Y, bExactEditTargetV170B ? 1 : 0, bNativeMouseFocusedEditV218 ? 1 : 0, bStartUTNameEditV169K ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
-    }
-    else if( bEditClickV170B )
-    {
-        // UWindow sometimes transfers edit focus one frame after Click(), most
-        // notably on OUYA. Preserve whether this came from an exact EditBox hit
-        // so the delayed check also avoids the old coordinate restrictions.
-        GUT99V112PendingKeyboardX = X;
-        GUT99V112PendingKeyboardY = Y;
-        GUT99V112PendingKeyboardUntil = appSeconds() + 0.60;
-        GUT99V170BPendingKeyboardFromEditTarget = bExactEditTargetV170B;
-        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME pending source=%s x=%d y=%d exact=%d ouya=%d", Source ? Source : "menu", X, Y, bExactEditTargetV170B ? 1 : 0, GUT99V79OuyaLikeDevice ? 1 : 0 );
-    }
-    else
-    {
-        // UT99_ANDROID_V113_OUYA_CHECKBOX_TOUCHPAD_FIX:
-        // A normal menu click, especially OUYA native touchpad clicks on checkboxes,
-        // must not be followed by SDL_StopTextInput() unless the IME is actually open.
-        // Calling StopTextInput after every non-edit click can eat/defocus the UWindow
-        // control on older OUYA/Android 4.x builds.
-        GUT99V112PendingKeyboardUntil = 0.0;
-        GUT99V170BPendingKeyboardFromEditTarget = 0;
-        if( GUT99AndroidImeOpenV79 )
-            UT99AndroidHideSoftKeyboardV72();
-        UT99_ANDROID_SDL_LOGI( "v113 no keyboard for non-edit %s click x=%d y=%d ime=%d", Source ? Source : "menu", X, Y, GUT99AndroidImeOpenV79 ? 1 : 0 );
+        GUT99AndroidImePendingPerfA = NULL;
+        GUT99AndroidImePendingIndexPerfA = INDEX_NONE;
     }
 }
 
@@ -1002,7 +1068,7 @@ static UBOOL UT99AndroidInsertFocusedEditBoxCharV83( BYTE C )
     if( C < 32 || C >= 128 )
         return 0;
 
-    UObject* EditObj = UT99AndroidFocusedEditBoxObjectV83();
+    UObject* EditObj = UT99AndroidTextTargetEditBoxPerfA();
     if( !EditObj )
         return 0;
 
@@ -1164,9 +1230,9 @@ static void UT99V50MenuControlsTick( UNSDLViewport* Viewport, UBOOL bMenu )
         // UT99_ANDROID_V88_MENU_CURSOR_CLICK:
         // In UWindow menus the user can steer the visible mouse cursor with
         // touch/left stick and confirm with the right shoulder button.
-        Viewport->CauseInputEvent( IK_LeftMouse, IST_Press, 0.0f );
-        Viewport->CauseInputEvent( IK_LeftMouse, IST_Release, 0.0f );
-        __android_log_print( ANDROID_LOG_INFO, "UT99SDL", "v88 menu R1/right shoulder -> LeftMouse click" );
+        // UT99_ANDROID_PERF_A_MENU_POINTER: the click itself is sent from
+        // TickInput() once console mouse and hover target match the cursor.
+        GUT99AndroidMenuClickRequestPerfA = 1;
     }
 
     V61OldB      = GUT99V50BtnB;
@@ -1434,14 +1500,20 @@ static char GUT99V82QueuedText[1024];
 static INT GUT99V82QueuedTextLen = 0;
 static DOUBLE GUT99V80StartFallbackTime = 0.0;
 static DOUBLE GUT99V80StartFallbackExpire = 0.0;
-static DOUBLE GUT99V47MenuRepeat[8] = {0};
 static DOUBLE GUT99V47LastAxisLog = 0.0;
-static DOUBLE GUT99V81LastCursorModeLog = 0.0;
 static INT GUT99V72StartToggleRequests = 0;
 static DOUBLE GUT99V72LastStartToggleQueueTime = 0.0;
 static DOUBLE GUT99V72LastStartToggleSendTime = 0.0;
 
 static FLOAT UT99V47AbsF( FLOAT V ) { return V < 0.0f ? -V : V; }
+static FLOAT UT99AndroidStickCursorCurvePerfA( FLOAT V, FLOAT Dead )
+{
+    // UT99_ANDROID_PERF_A_MENU_POINTER: full speed from 85% deflection (OUYA
+    // sticks rarely report 1.0) and a soft curve for small checkboxes.
+    const FLOAT Mag = Clamp( ( UT99V47AbsF( V ) - Dead ) / ( 0.85f - Dead ), 0.0f, 1.0f );
+    const FLOAT Shaped = Mag * (FLOAT)appSqrt( Mag );
+    return V < 0.0f ? -Shaped : Shaped;
+}
 static FLOAT UT99V47ClampF( FLOAT V, FLOAT Lo, FLOAT Hi ) { return V < Lo ? Lo : (V > Hi ? Hi : V); }
 static void UT99V47Event( UNSDLViewport* Viewport, INT Key, EInputAction Action, FLOAT Delta=0.0f )
 {
@@ -1546,17 +1618,6 @@ static void UT99V117PressMapped( UNSDLViewport* Viewport, INT Key, UBOOL& OldSta
         if( Name )
             UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CONTROLLER_BINDING_FIX_V117 %s key=%d down", Name, Key );
     }
-}
-
-static UBOOL UT99V47MenuPulse( UNSDLViewport* Viewport, INT Key, INT Slot, FLOAT AnalogValue = 1.0f )
-{
-    DOUBLE Now = appSeconds();
-    if( GUT99V47MenuRepeat[Slot] > 0.0 && (Now - GUT99V47MenuRepeat[Slot]) < 0.20 )
-        return 0;
-    GUT99V47MenuRepeat[Slot] = Now;
-    UT99V47Event( Viewport, Key, IST_Press );
-    UT99V47Event( Viewport, Key, IST_Release );
-    return 1;
 }
 
 static void UT99V88MenuMouseCursorTick( UNSDLViewport* Viewport )
@@ -1734,28 +1795,7 @@ static void UT99V47TickInput( UNSDLViewport* Viewport, UBOOL bMenu )
         }
 #endif
 #if defined(__ANDROID__)
-        if( GUT99V112PendingKeyboardUntil > 0.0 )
-        {
-            const DOUBLE NowKeyboard = appSeconds();
-            if( NowKeyboard <= GUT99V112PendingKeyboardUntil )
-            {
-                const UBOOL bFocusedPendingEditV170B = GUT99V170BPendingKeyboardFromEditTarget
-                    ? UT99AndroidFocusedEditBoxWantsKeyboardV79()
-                    : UT99AndroidFocusedEditBoxWantsKeyboardAtV84( GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
-                if( bFocusedPendingEditV170B )
-                {
-                    UT99AndroidShowSoftKeyboardV44( NULL, GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
-                    GUT99V112PendingKeyboardUntil = 0.0;
-                    GUT99V170BPendingKeyboardFromEditTarget = 0;
-                    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V170B_EXACT_EDIT_TARGET_IME delayed keyboard x=%d y=%d", GUT99V112PendingKeyboardX, GUT99V112PendingKeyboardY );
-                }
-            }
-            else
-            {
-                GUT99V112PendingKeyboardUntil = 0.0;
-                GUT99V170BPendingKeyboardFromEditTarget = 0;
-            }
-        }
+        UT99AndroidTickPendingKeyboardPerfA();
 #endif
         // v72: START/MENU is processed once at the top of this tick.
         // Do not replay old queued-start-menu pulses.
@@ -1779,7 +1819,10 @@ static void UT99V47TickInput( UNSDLViewport* Viewport, UBOOL bMenu )
         // above, where one physical edge emits one UI key.  The legacy repeat
         // pulses below caused OUYA to skip every second menu item because OUYA
         // reports the same D-Pad edge through multiple paths.
-        if( GUT99V47BtnA && !GUT99AndroidImeOpenV79 ) UT99V47MenuPulse( Viewport, 13, 4 );
+        // UT99_ANDROID_PERF_A_MENU_A_SINGLE_ENTER:
+        // A already sends exactly one Joy1+Enter per press from
+        // UT99V49MenuCaptureTick() above. The extra held-A pulse here produced
+        // a second Enter in the same tick and repeated it every 0.2 s.
         /* UT99_ANDROID_V52_B_NO_MENU_BACK: B is bindable, not menu back */
         // UT99_ANDROID_START_MENU_HOLD_FIX_V48:
 // START opens UWindow from gameplay. Once the menu is already open,
@@ -2254,6 +2297,13 @@ static UBOOL UT99AndroidMenuControllerButtonV43( UNSDLViewport* Viewport, INT Bu
         return 1;
     }
 #endif
+    if( Key == IK_LeftMouse )
+    {
+        // UT99_ANDROID_PERF_A_MENU_POINTER: same pointer-synchronised click as
+        // the Java/V47 R1 path.
+        GUT99AndroidMenuClickRequestPerfA = 1;
+        return 1;
+    }
 
     Viewport->CauseInputEvent( (EInputKey)Key, IST_Press );
     Viewport->CauseInputEvent( (EInputKey)Key, IST_Release );
@@ -2571,49 +2621,20 @@ static UObject* UT99AndroidFindObjectPropertyV169E( UObject* Obj, const TCHAR* N
     return NULL;
 }
 
-static UObject* UT99AndroidFindWindowConsoleV169E()
-{
-    for( TObjectIterator<UObject> It; It; ++It )
-    {
-        UObject* Obj = *It;
-        if( !Obj || !Obj->GetClass() )
-            continue;
-        const TCHAR* ClassName = Obj->GetClass()->GetName();
-        if( ClassName && appStrstr( ClassName, TEXT("WindowConsole") ) )
-            return Obj;
-    }
-    return NULL;
-}
-
 static UObject* UT99AndroidFindUWindowRootV169E()
 {
-    UObject* Console = UT99AndroidFindWindowConsoleV169E();
-    if( !Console )
-        return NULL;
-    return UT99AndroidFindObjectPropertyV169E( Console, TEXT("Root") );
+    // UT99_ANDROID_PERF_A_MENU_CONSOLE: viewport console, no object scan.
+    return UT99AndroidUWindowRootPerfA();
 }
 
 static FLOAT UT99AndroidGetRootScaleV169E( UObject* Root )
 {
-    if( !Root )
-        return 1.0f;
-    UFloatProperty* ScaleProp = UT99AndroidFindFloatPropertyV91( Root, TEXT("GUIScale") );
-    if( !ScaleProp )
-        return 1.0f;
-    FLOAT Scale = *(FLOAT*)((BYTE*)Root + ScaleProp->Offset);
-    if( Scale < 0.25f )
-        Scale = 1.0f;
-    return Scale;
+    return UT99AndroidUWindowScalePerfA( Root );
 }
 
 static void UT99AndroidSetWindowConsoleMouseUIV169E( FLOAT X, FLOAT Y )
 {
-    UObject* Console = UT99AndroidFindWindowConsoleV169E();
-    if( Console )
-    {
-        UT99AndroidSetFloatPropertyV91( Console, TEXT("MouseX"), X );
-        UT99AndroidSetFloatPropertyV91( Console, TEXT("MouseY"), Y );
-    }
+    UT99AndroidSetConsoleMouseUIPerfA( X, Y );
 }
 
 static UBOOL UT99AndroidUWindowMoveMouseV169E( UNSDLViewport* Viewport, INT MouseX, INT MouseY, FLOAT* OutUIX, FLOAT* OutUIY )
@@ -2657,35 +2678,28 @@ static void UT99AndroidHideOrParkMenuPointerV169K( UNSDLViewport* Viewport, UBOO
     // UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE:
     // Park the UWindow mouse outside the top menu when touch is the active input
     // mode.  This prevents UMenuMenuBar from keeping the previous hover item as
-    // the first click target.  HID/BT mouse and left-stick virtual mouse re-enable
-    // a visible cursor through UT99AndroidMenuPointerActivityV169K().
+    // the first click target.
+    // UT99_ANDROID_PERF_A_MENU_POINTER: runs once per touch/menu-open, never
+    // while a mouse or stick pointer owns the menu.
     if( !Viewport )
         return;
     if( !bForcePark && UT99AndroidMenuPointerVisibleV169K() )
         return;
+    GUT99AndroidMenuPointerParkPendingPerfA = 0;
 
     // UT99_ANDROID_V169M_CENTER_IDLE_VIRTUAL_MOUSE:
-    // Keep touch/idle mode away from the top menu hover area, but do not leave
-    // the virtual left-stick mouse parked in the lower-right corner.  Centering
-    // the hidden UWindow pointer makes the next left-stick activation start from
-    // a predictable, comfortable position on both Retroid and OUYA.
+    // Centre the hidden pointer so a later left-stick activation starts from
+    // a predictable position.
     const INT ParkX = Clamp<INT>( Max( 1, Viewport->SizeX ) / 2, 0, Max( 1, Viewport->SizeX ) - 1 );
     const INT ParkY = Clamp<INT>( Max( 1, Viewport->SizeY ) / 2, 0, Max( 1, Viewport->SizeY ) - 1 );
+    Viewport->bWindowsMouseAvailable = 1;
+    FLOAT UIX = 0.0f, UIY = 0.0f;
+    UT99AndroidUWindowMoveMouseV169E( Viewport, ParkX, ParkY, &UIX, &UIY );
     Viewport->WindowsMouseX = ParkX;
     Viewport->WindowsMouseY = ParkY;
     Viewport->SelectedCursor = 0;
-    Viewport->bWindowsMouseAvailable = 1;
-    UT99AndroidSetWindowConsoleMouseV91( ParkX, ParkY );
-    FLOAT UIX = 0.0f, UIY = 0.0f;
-    UT99AndroidUWindowMoveMouseV169E( Viewport, ParkX, ParkY, &UIX, &UIY );
     SDL_ShowCursor( SDL_DISABLE );
-
-    DOUBLE Now = appSeconds();
-    if( Now - GUT99V169KMenuPointerLastLog > 0.80 )
-    {
-        GUT99V169KMenuPointerLastLog = Now;
-        UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE pointer parked source=%s x=%d y=%d", Source ? Source : "?", ParkX, ParkY );
-    }
+    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V169K_TOUCH_IDLE_CURSOR_HIDE pointer parked source=%s x=%d y=%d", Source ? Source : "?", ParkX, ParkY );
 }
 
 static UBOOL UT99AndroidClassHasNameV169H( UObject* Obj, const TCHAR* Needle )
@@ -2722,6 +2736,31 @@ static UObject* UT99AndroidFindWindowUnderV169H( UObject* Root, FLOAT UIX, FLOAT
     Parms.Y = UIY;
     Root->ProcessEvent( FindWindowUnder, &Parms );
     return Parms.ReturnValue;
+}
+
+static UObject* UT99AndroidEditBoxForWindowPerfA( UObject* Window )
+{
+    // UT99_ANDROID_PERF_A_EDIT_TARGET_IME:
+    // The window under the pointer is the edit box itself for clicks into the
+    // text, or its UWindowEditControl for clicks on the label/frame.
+    if( !Window )
+        return NULL;
+    if( UT99AndroidClassHasNameV169H( Window, TEXT("EditBox") ) )
+        return Window;
+    if( UT99AndroidClassHasNameV169H( Window, TEXT("EditControl") ) )
+    {
+        UObject* EditBox = UT99AndroidFindObjectPropertyV169E( Window, TEXT("EditBox") );
+        if( EditBox && UT99AndroidClassHasNameV169H( EditBox, TEXT("EditBox") ) )
+            return EditBox;
+    }
+    return NULL;
+}
+
+static void UT99AndroidRememberClickTargetPerfA( FLOAT UIX, FLOAT UIY )
+{
+    UObject* Root = UT99AndroidFindUWindowRootV169E();
+    UObject* Target = Root ? UT99AndroidFindWindowUnderV169H( Root, UIX, UIY ) : NULL;
+    UT99AndroidSetImeCandidatePerfA( UT99AndroidEditBoxForWindowPerfA( Target ) );
 }
 
 static UBOOL UT99AndroidCallGetMouseXYV169H( UObject* Window, FLOAT* OutX, FLOAT* OutY )
@@ -3129,7 +3168,7 @@ static UBOOL UT99AndroidUWindowWindowEventV169E( UNSDLViewport* Viewport, INT Me
         // Save the exact finger-down target for the post-click IME decision.
         // A later non-edit touch clears this immediately, preventing stale focus
         // from reopening the keyboard on checkboxes or other menu controls.
-        GUT99V170BLastTouchWasEditTarget = Target && UT99AndroidIsEditTargetV169I( Target );
+        UT99AndroidSetImeCandidatePerfA( UT99AndroidEditBoxForWindowPerfA( Target ) );
     }
     if( Target && UT99AndroidDirectWindowClickV169H( Target, Message ) )
     {
@@ -3687,6 +3726,10 @@ UNSDLViewport::UNSDLViewport( ULevel* InLevel, UNSDLClient* InClient )
 void UNSDLViewport::Destroy()
 {
 	guard(UNSDLViewport::Destroy);
+#ifdef PLATFORM_ANDROID
+	if( GUT99AndroidMenuViewportPerfA == this )
+		GUT99AndroidMenuViewportPerfA = NULL; // UT99_ANDROID_PERF_A_MENU_CONSOLE
+#endif
 	// Note: FullscreenViewport tracking removed - Unreal 1 specific
 	UViewport::Destroy();
 	unguard;
@@ -4484,28 +4527,53 @@ void UNSDLViewport::AndroidUpdateNativeMouseCaptureV113( UBOOL bMenuMode )
 	// window border.  Once a real mouse was seen, capture it only during gameplay:
 	// SDL relative mode hides/locks the pointer and gives us infinite xrel/yrel.
 	const UBOOL WantCapture = ( !bMenuMode && GUT99V113NativeMouseSeen && hWnd ) ? 1 : 0;
+	GUT99V113NativeMouseGameplayModePerfA = WantCapture; // UT99_ANDROID_PERF_A_CAPTURE_RETRY
 	if( WantCapture != GUT99V113NativeMouseCaptureActive )
 	{
 		if( WantCapture )
 		{
+			// UT99_ANDROID_PERF_A_CAPTURE_RETRY:
+			// Below Android 7 (API 24, e.g. OUYA/Android 4.1) SDL has no relative
+			// mouse mode at all. Since V214 a rejected capture left the flag clear,
+			// so this block ran again on every gameplay frame after the first
+			// touchpad/mouse event: cursor JNI calls, a logcat line, a reset of the
+			// absolute-delta look fallback (touchpad look never moved) and a
+			// refreshed touch-suppression window. Remember a permanent rejection
+			// and throttle retries where capture may still succeed later (ARC
+			// focus changes), keeping the absolute-delta fallback untouched.
+			static UBOOL  GUT99AndroidCaptureUnsupportedPerfA = 0;
+			static DOUBLE GUT99AndroidCaptureRetryAfterPerfA = 0.0;
+			if( GUT99AndroidCaptureUnsupportedPerfA )
+				return;
+			const DOUBLE NowPerfA = appSeconds();
+			if( NowPerfA < GUT99AndroidCaptureRetryAfterPerfA )
+				return;
+
 			SDL_ShowCursor( SDL_DISABLE );
 			SDL_SetWindowGrab( hWnd, SDL_TRUE );
 			const INT RelResult = SDL_SetRelativeMouseMode( SDL_TRUE );
-			GUT99V111NativeMouseHadLast = 0;
-			for( INT i=0; i<8; ++i ) GUT99V115MenuButtonDownValid[i] = 0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
-			UT99AndroidMarkNativeMouseActivityV111(); // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 			// UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214:
 			// Do not claim capture when Android/ChromeOS rejected it. Leaving the
 			// flag clear keeps the existing absolute-delta gameplay fallback alive
 			// and lets later ticks retry after the Surface gains focus.
 			GUT99V113NativeMouseCaptureActive =
 				( RelResult == 0 && SDL_GetRelativeMouseMode() ) ? 1 : 0;
-			if( !GUT99V113NativeMouseCaptureActive )
+			if( GUT99V113NativeMouseCaptureActive )
+			{
+				GUT99V111NativeMouseHadLast = 0;
+				for( INT i=0; i<8; ++i ) GUT99V115MenuButtonDownValid[i] = 0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
+				UT99AndroidMarkNativeMouseActivityV111(); // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
+			}
+			else
 			{
 				SDL_SetWindowGrab( hWnd, SDL_FALSE );
 				SDL_ShowCursor( SDL_ENABLE );
+				if( SDL_GetAndroidSDKVersion() < 24 )
+					GUT99AndroidCaptureUnsupportedPerfA = 1;
+				else
+					GUT99AndroidCaptureRetryAfterPerfA = NowPerfA + 0.50;
 			}
-			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214 enabled result=%d active=%d viewport=%dx%d", RelResult, GUT99V113NativeMouseCaptureActive ? 1 : 0, SizeX, SizeY );
+			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214 enabled result=%d active=%d unsupported=%d viewport=%dx%d", RelResult, GUT99V113NativeMouseCaptureActive ? 1 : 0, GUT99AndroidCaptureUnsupportedPerfA ? 1 : 0, SizeX, SizeY );
 		}
 		else
 		{
@@ -4543,6 +4611,10 @@ UBOOL UNSDLViewport::TickInput()
 	INT Tmp;
 	const FLOAT CurTime = appSeconds();
 	const FLOAT DeltaTime = CurTime - InputUpdateTime;
+
+#ifdef PLATFORM_ANDROID
+	GUT99AndroidMenuViewportPerfA = this; // UT99_ANDROID_PERF_A_MENU_CONSOLE
+#endif
 
 #ifdef PLATFORM_ANDROID
     if( GUT99AndroidPendingResolutionXV219 > 0
@@ -4674,12 +4746,16 @@ UBOOL UNSDLViewport::TickInput()
         if( bShowWindowsMouse )
         {
             // UT99_ANDROID_V81_CURSOR_MODE_SWITCH:
-            // There are two real menu pointer modes on Android/OUYA:
-            //  1) Left stick drives the UT99/UWindow software cursor.
-            //  2) Native Android/OUYA mouse/touchpad uses the platform cursor.
-            // Trying to draw both cursors at once exposes scaling differences at
-            // 75%/50% native Res.  Therefore native mouse activity hides the
-            // UT99 software cursor until the left stick is moved again.
+            // Left stick drives the UWindow software cursor (bWindowsMouseAvailable=0);
+            // a native mouse/OUYA touchpad uses the platform cursor
+            // (bWindowsMouseAvailable=1, UWindow draws no second cursor).
+            // UT99_ANDROID_PERF_A_MENU_POINTER:
+            // The active pointer keeps its position until another input type
+            // takes over; touch and a freshly opened menu park it once.
+            if( !GUT99AndroidMenuActiveLastPerfA && !UT99AndroidMenuPointerVisibleV169K() )
+                GUT99AndroidMenuPointerParkPendingPerfA = 1;
+            GUT99AndroidMenuActiveLastPerfA = 1;
+
             const FLOAT Dead = 0.16f;
             FLOAT LX = GUT99V47LX;
             FLOAT LY = GUT99V47LY;
@@ -4687,71 +4763,116 @@ UBOOL UNSDLViewport::TickInput()
             if( UT99V47AbsF( LY ) <= Dead ) LY = 0.0f;
             const UBOOL bStickCursorActive = (LX != 0.0f || LY != 0.0f);
 
-            if( !UT99AndroidMenuPointerVisibleV169K() && !bStickCursorActive && !GUT99AndroidMenuTouchActiveV169B )
+            if( bStickCursorActive )
             {
-                // Touch-only/idle menu mode: no active cursor hover.  Parking the
-                // mouse away from the menu bar makes direct touch selection stable.
-                GUT99V81NativePointerActive = 0;
-                UT99AndroidHideOrParkMenuPointerV169K( this, 0, "idle-menu" );
-            }
-            else if( GUT99V81NativePointerActive && !bStickCursorActive )
-            {
-                // Hide UT99's drawn software cursor; the Android/OUYA native
-                // cursor remains visible and clicks are still delivered at the
-                // scaled viewport coordinates by the mouse event path.
-                bWindowsMouseAvailable = 1;
-                SelectedCursor = 0;
-
-                DOUBLE Now = appSeconds();
-                if( Now - GUT99V81LastCursorModeLog > 1.20 )
-                {
-                    GUT99V81LastCursorModeLog = Now;
-                    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V81_CURSOR_MODE native pointer active: hiding UT99 software cursor viewport=%dx%d", SizeX, SizeY );
-                }
-            }
-            else
-            {
-                if( GUT99V81NativePointerActive && bStickCursorActive )
+                if( GUT99V81NativePointerActive )
                 {
                     GUT99V81NativePointerActive = 0;
                     UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_V81_CURSOR_MODE left stick restored UT99 software cursor" );
                 }
-
-                // Keep the software cursor visible while the left stick is actively
-                // used as a virtual mouse.  It will hide again after the v169k idle
-                // timeout.
-                if( bStickCursorActive )
-                    UT99AndroidMenuPointerActivityV169K( 0, "left-stick" );
+                UT99AndroidMenuPointerActivityV169K( 0, "left-stick" );
                 bWindowsMouseAvailable = 0;
                 SelectedCursor = 0;
 
-                if( bStickCursorActive )
+                const INT W = Max( 1, SizeX );
+                const INT H = Max( 1, SizeY );
+                if( WindowsMouseX < 0.0f || WindowsMouseX >= (FLOAT)W ) WindowsMouseX = (FLOAT)W * 0.5f;
+                if( WindowsMouseY < 0.0f || WindowsMouseY >= (FLOAT)H ) WindowsMouseY = (FLOAT)H * 0.5f;
+
+                // Speed is per second and relative to the viewport height, so
+                // the cursor feels the same at 30 or 60 fps and at 720p or
+                // 1080p (v107 moved a fixed 14/7.5 px per tick).
+                const DOUBLE NowStick = appSeconds();
+                FLOAT StepSeconds = (FLOAT)( NowStick - GUT99AndroidStickCursorLastTimePerfA );
+                if( GUT99AndroidStickCursorLastTimePerfA <= 0.0 || StepSeconds <= 0.0f || StepSeconds > 0.10f )
+                    StepSeconds = 1.0f / 60.0f;
+                GUT99AndroidStickCursorLastTimePerfA = NowStick;
+                const FLOAT Speed = (FLOAT)H * 0.85f;
+                const FLOAT DX = UT99AndroidStickCursorCurvePerfA( LX, Dead ) * Speed * StepSeconds;
+                const FLOAT DY = UT99AndroidStickCursorCurvePerfA( LY, Dead ) * Speed * StepSeconds;
+
+                WindowsMouseX = Clamp( WindowsMouseX + DX, 0.0f, (FLOAT)Max( 1, W - 1 ) );
+                WindowsMouseY = Clamp( WindowsMouseY + DY, 0.0f, (FLOAT)Max( 1, H - 1 ) );
+                // RenderUWindow() copies WindowsMouseX/Y only while
+                // bWindowsMouseAvailable is set, so write the console mouse
+                // here. The former MouseX/MouseY axis events moved it a second
+                // time by MouseScale and let both positions drift apart.
+                UT99AndroidSetWindowConsoleMouseV91( WindowsMouseX, WindowsMouseY );
+
+                DOUBLE Now = appSeconds();
+                if( Now - GUT99V47LastAxisLog > 0.80 )
                 {
-                    const INT W = Max( 1, SizeX );
-                    const INT H = Max( 1, SizeY );
-                    if( WindowsMouseX < 0.0f || WindowsMouseX >= (FLOAT)W ) WindowsMouseX = (FLOAT)W * 0.5f;
-                    if( WindowsMouseY < 0.0f || WindowsMouseY >= (FLOAT)H ) WindowsMouseY = (FLOAT)H * 0.5f;
-
-                    // Retroid already feels right at v91 speed.  OUYA reports lower
-                    // effective movement, so compensate only on the OUYA profile.
-                    const FLOAT Speed = GUT99V79OuyaLikeDevice ? 14.0f : 7.5f;
-                    const FLOAT DX = LX * Speed;
-                    const FLOAT DY = LY * Speed;
-
-                    WindowsMouseX = Clamp( WindowsMouseX + DX, 0.0f, (FLOAT)Max( 1, W - 1 ) );
-                    WindowsMouseY = Clamp( WindowsMouseY + DY, 0.0f, (FLOAT)Max( 1, H - 1 ) );
-                    UT99AndroidSetWindowConsoleMouseV91( WindowsMouseX, WindowsMouseY );
-                    if( DX != 0.0f ) CauseInputEvent( IK_MouseX, IST_Axis, DX );
-                    if( DY != 0.0f ) CauseInputEvent( IK_MouseY, IST_Axis, -DY );
-
-                    DOUBLE Now = appSeconds();
-                    if( Now - GUT99V47LastAxisLog > 0.80 )
-                    {
-                        GUT99V47LastAxisLog = Now;
-                        UT99_ANDROID_SDL_LOGI( "v107 software menu cursor x=%.1f y=%.1f dx=%.1f dy=%.1f", WindowsMouseX, WindowsMouseY, DX, DY );
-                    }
+                    GUT99V47LastAxisLog = Now;
+                    UT99_ANDROID_SDL_LOGI( "v107 software menu cursor x=%.1f y=%.1f dx=%.1f dy=%.1f", WindowsMouseX, WindowsMouseY, DX, DY );
                 }
             }
+            else
+            {
+                GUT99AndroidStickCursorLastTimePerfA = 0.0;
+                if( GUT99AndroidMenuPointerModePerfA == UT99_MENU_POINTER_STICK )
+                {
+                    bWindowsMouseAvailable = 0;
+                    SelectedCursor = 0;
+                }
+                else if( GUT99AndroidMenuPointerModePerfA == UT99_MENU_POINTER_NATIVE )
+                {
+                    bWindowsMouseAvailable = 1;
+                    SelectedCursor = 0;
+                }
+                else if( GUT99AndroidMenuPointerParkPendingPerfA && !GUT99AndroidMenuTouchActiveV169B )
+                {
+                    // Touch-only/fresh menu: no cursor hover. Parking the mouse
+                    // away from the menu bar makes direct touch selection stable.
+                    GUT99V81NativePointerActive = 0;
+                    UT99AndroidHideOrParkMenuPointerV169K( this, 1,
+                        GUT99AndroidMenuPointerModePerfA == UT99_MENU_POINTER_TOUCH ? "touch" : "menu-open" );
+                }
+            }
+
+            // System cursor only for the native pointer. Releasing gameplay
+            // mouse capture re-enables it, so compare every tick; SDL itself
+            // only acts when the state really changes.
+            const int WantCursor = ( GUT99AndroidMenuPointerModePerfA == UT99_MENU_POINTER_NATIVE ) ? SDL_ENABLE : SDL_DISABLE;
+            if( SDL_ShowCursor( SDL_QUERY ) != WantCursor )
+                SDL_ShowCursor( WantCursor );
+
+            if( GUT99AndroidMenuClickRequestPerfA )
+            {
+                GUT99AndroidMenuClickRequestPerfA = 0;
+                if( !UT99AndroidMenuPointerVisibleV169K() )
+                {
+                    // No cursor on screen (touch or fresh menu): the first R1
+                    // shows the software cursor instead of clicking blindly.
+                    UT99AndroidMenuPointerActivityV169K( 0, "r1-show-cursor" );
+                    bWindowsMouseAvailable = 0;
+                    SelectedCursor = 0;
+                    UT99AndroidSetWindowConsoleMouseV91( WindowsMouseX, WindowsMouseY );
+                }
+                else
+                {
+                    // Move UWindow's console mouse and hover target onto the
+                    // cursor first, then click there.
+                    const FLOAT CursorX = WindowsMouseX;
+                    const FLOAT CursorY = WindowsMouseY;
+                    const INT ClickX = (INT)CursorX;
+                    const INT ClickY = (INT)CursorY;
+                    FLOAT ClickUIX = 0.0f;
+                    FLOAT ClickUIY = 0.0f;
+                    UT99AndroidUWindowMoveMouseV169E( this, ClickX, ClickY, &ClickUIX, &ClickUIY );
+                    WindowsMouseX = CursorX;
+                    WindowsMouseY = CursorY;
+                    UT99AndroidRememberClickTargetPerfA( ClickUIX, ClickUIY );
+                    CauseInputEvent( IK_LeftMouse, IST_Press );
+                    CauseInputEvent( IK_LeftMouse, IST_Release );
+                    UT99AndroidShowKeyboardForClickedEditV110( hWnd, ClickX, ClickY, "r1" );
+                    UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_PERF_A_MENU_POINTER R1 click x=%d y=%d mode=%d", ClickX, ClickY, GUT99AndroidMenuPointerModePerfA );
+                }
+            }
+        }
+        else
+        {
+            GUT99AndroidMenuActiveLastPerfA = 0;
+            GUT99AndroidMenuClickRequestPerfA = 0;
         }
 #endif
 while( SDL_PollEvent( &Ev ) )
@@ -4834,23 +4955,14 @@ while( SDL_PollEvent( &Ev ) )
 					}
 					if( Ev.key.keysym.sym >= 32 && Ev.key.keysym.sym < 127 )
 					{
-                        if( GUT99V79OuyaLikeDevice )
-                        {
-                            UT99_ANDROID_SDL_LOGI( "v112 OUYA ignored printable SDL_KEYDOWN because Java IME bridge is active sym=%d", (INT)Ev.key.keysym.sym );
-                            break;
-                        }
-						if( Client && Client->Engine )
-						{
-							BYTE C = (BYTE)Ev.key.keysym.sym;
-							if( !UT99AndroidInsertFocusedEditBoxCharV83( C ) )
-							{
-								CauseInputEvent( (EInputKey)C, IST_Press );
-								Client->Engine->Key( this, (EInputKey)C );
-								CauseInputEvent( (EInputKey)C, IST_Release );
-							}
-						}
-						UT99_ANDROID_SDL_LOGI( "v83 SDL_KEYDOWN printable committed sym=%d", (INT)Ev.key.keysym.sym );
-						break;
+                        // UT99_ANDROID_PERF_A_TEXT_DEDUPE:
+                        // While the IME is open SDL's Java side commits every
+                        // printable key as text as well (V82 bridge, or
+                        // SDL_TEXTINPUT when the surface has focus). Inserting
+                        // the key symbol here typed each character twice and
+                        // dropped Shift/CapsLock, since sym is the unshifted key.
+                        // v112 already did this on OUYA only.
+                        break;
 					}
 				}
 #endif
@@ -4890,6 +5002,16 @@ while( SDL_PollEvent( &Ev ) )
                         // otherwise sliders/selectors step once on press and again
                         // on release.
                         UT99AndroidApplyNativeMouseToUWindowV110( this, MouseX, MouseY );
+                        // UT99_ANDROID_PERF_A_MENU_POINTER:
+                        // Console mouse and Root.MoveMouse() hover must be at the
+                        // click position before the button event; RenderUWindow()
+                        // only syncs them on the next frame (menu bar/pulldown
+                        // items select on hover).
+                        FLOAT ClickUIX = 0.0f;
+                        FLOAT ClickUIY = 0.0f;
+                        UT99AndroidUWindowMoveMouseV169E( this, MouseX, MouseY, &ClickUIX, &ClickUIY );
+                        if( Ev.type == SDL_MOUSEBUTTONDOWN && ButtonFlag == MOUSE_Left )
+                            UT99AndroidRememberClickTargetPerfA( ClickUIX, ClickUIY );
                         const UBOOL SavedWindowsMouseAvailable = bWindowsMouseAvailable;
                         WindowsMouseX = MouseX;
                         WindowsMouseY = MouseY;

@@ -641,6 +641,14 @@ class SDLHapticHandler {
 class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
     // Generic Motion (mouse hover, joystick...) events go here
 
+    // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE:
+    // The V214 source-mask/ACTION_MOVE routing exists for ChromeOS/ARC. OUYA
+    // and every other device keep the exact 2.2.0 source matching, so their
+    // controller/mouse/touchpad routing is unchanged.
+    protected static boolean ut99ChromeOS() {
+        return SDLActivity.ut99IsChromeOS(null);
+    }
+
     protected boolean ut99V214IsMouseLike(MotionEvent event) {
         if (event == null) return false;
         final int source = event.getSource();
@@ -649,21 +657,14 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
                 && (source & InputDevice.SOURCE_MOUSE_RELATIVE)
                 == InputDevice.SOURCE_MOUSE_RELATIVE) return true;
         if ((source & InputDevice.SOURCE_TOUCHPAD) == InputDevice.SOURCE_TOUCHPAD) return true;
-        try {
-            final android.content.Context context = SDL.getContext();
-            final boolean chromeOS = context != null
-                    && context.getPackageManager().hasSystemFeature(
-                    "org.chromium.arc.device_management");
-            final boolean controller =
-                    (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
-                    || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
-            if (chromeOS && !controller
-                    && (((source & InputDevice.SOURCE_CLASS_POINTER)
-                    == InputDevice.SOURCE_CLASS_POINTER)
-                    || ((source & InputDevice.SOURCE_CLASS_POSITION)
-                    == InputDevice.SOURCE_CLASS_POSITION))) return true;
-        } catch (Throwable ignored) {
-        }
+        final boolean controller =
+                (source & InputDevice.SOURCE_GAMEPAD) == InputDevice.SOURCE_GAMEPAD
+                || (source & InputDevice.SOURCE_JOYSTICK) == InputDevice.SOURCE_JOYSTICK;
+        if (ut99ChromeOS() && !controller
+                && (((source & InputDevice.SOURCE_CLASS_POINTER)
+                == InputDevice.SOURCE_CLASS_POINTER)
+                || ((source & InputDevice.SOURCE_CLASS_POSITION)
+                == InputDevice.SOURCE_CLASS_POSITION))) return true;
         try {
             return event.getPointerCount() > 0
                     && event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE;
@@ -672,8 +673,49 @@ class SDLGenericMotionListener_API12 implements View.OnGenericMotionListener {
         }
     }
 
+    // 2.2.0 routing, used on every device except ChromeOS.
+    private boolean ut99OnGenericMotionV220(MotionEvent event) {
+        float x, y;
+        int action;
+
+        switch ( event.getSource() ) {
+            case InputDevice.SOURCE_JOYSTICK:
+                return SDLControllerManager.handleJoystickMotionEvent(event);
+
+            case InputDevice.SOURCE_MOUSE:
+                action = event.getActionMasked();
+                switch (action) {
+                    case MotionEvent.ACTION_SCROLL:
+                        x = event.getAxisValue(MotionEvent.AXIS_HSCROLL, 0);
+                        y = event.getAxisValue(MotionEvent.AXIS_VSCROLL, 0);
+                        SDLActivity.onNativeMouse(0, action, x, y, false);
+                        return true;
+
+                    case MotionEvent.ACTION_HOVER_MOVE:
+                        x = ut99V116ScaleMouseX(event.getX(0));
+                        y = ut99V116ScaleMouseY(event.getY(0));
+                        SDLActivity.onNativeMouse(0, action, x, y, false);
+                        return true;
+
+                    default:
+                        break;
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        // Event was not managed
+        return false;
+    }
+
     @Override
     public boolean onGenericMotion(View v, MotionEvent event) {
+        if (!ut99ChromeOS()) {
+            return ut99OnGenericMotionV220(event);
+        }
+
         float x, y;
         int action;
 
@@ -786,6 +828,19 @@ class SDLGenericMotionListener_API24 extends SDLGenericMotionListener_API12 {
 
     @Override
     public boolean onGenericMotion(View v, MotionEvent event) {
+        if (!ut99ChromeOS()) {
+            // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE: 2.2.0 relative-mode handling.
+            if (mRelativeModeEnabled
+                    && event.getSource() == InputDevice.SOURCE_MOUSE
+                    && event.getActionMasked() == MotionEvent.ACTION_HOVER_MOVE) {
+                float x = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X);
+                float y = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y);
+                SDLActivity.onNativeMouse(0, MotionEvent.ACTION_HOVER_MOVE, x, y, true);
+                return true;
+            }
+            return super.onGenericMotion(v, event);
+        }
+
         // Handle relative mouse mode
         if (mRelativeModeEnabled) {
             if (ut99V214IsMouseLike(event)) {
@@ -847,8 +902,71 @@ class SDLGenericMotionListener_API26 extends SDLGenericMotionListener_API24 {
     // Generic Motion (mouse hover, joystick...) events go here
     private boolean mRelativeModeEnabled;
 
+    // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE: 2.2.0 routing for non-ChromeOS devices.
+    private boolean ut99OnGenericMotionV220Api26(MotionEvent event) {
+        float x, y;
+        int action;
+
+        switch ( event.getSource() ) {
+            case InputDevice.SOURCE_JOYSTICK:
+                return SDLControllerManager.handleJoystickMotionEvent(event);
+
+            case InputDevice.SOURCE_MOUSE:
+            // DeX desktop mouse cursor is a separate non-standard input type.
+            case InputDevice.SOURCE_MOUSE | InputDevice.SOURCE_TOUCHSCREEN:
+                action = event.getActionMasked();
+                switch (action) {
+                    case MotionEvent.ACTION_SCROLL:
+                        x = event.getAxisValue(MotionEvent.AXIS_HSCROLL, 0);
+                        y = event.getAxisValue(MotionEvent.AXIS_VSCROLL, 0);
+                        SDLActivity.onNativeMouse(0, action, x, y, false);
+                        return true;
+
+                    case MotionEvent.ACTION_HOVER_MOVE:
+                        x = ut99V116ScaleMouseX(event.getX(0));
+                        y = ut99V116ScaleMouseY(event.getY(0));
+                        SDLActivity.onNativeMouse(0, action, x, y, false);
+                        return true;
+
+                    default:
+                        break;
+                }
+                break;
+
+            case InputDevice.SOURCE_MOUSE_RELATIVE:
+                action = event.getActionMasked();
+                switch (action) {
+                    case MotionEvent.ACTION_SCROLL:
+                        x = event.getAxisValue(MotionEvent.AXIS_HSCROLL, 0);
+                        y = event.getAxisValue(MotionEvent.AXIS_VSCROLL, 0);
+                        SDLActivity.onNativeMouse(0, action, x, y, false);
+                        return true;
+
+                    case MotionEvent.ACTION_HOVER_MOVE:
+                        x = event.getX(0);
+                        y = event.getY(0);
+                        SDLActivity.onNativeMouse(0, action, x, y, true);
+                        return true;
+
+                    default:
+                        break;
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        // Event was not managed
+        return false;
+    }
+
     @Override
     public boolean onGenericMotion(View v, MotionEvent event) {
+        if (!ut99ChromeOS()) {
+            return ut99OnGenericMotionV220Api26(event);
+        }
+
         float x, y;
         int action;
 

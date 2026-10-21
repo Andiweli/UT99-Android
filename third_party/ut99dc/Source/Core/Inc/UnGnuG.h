@@ -95,14 +95,18 @@ enum {CACHE_LINE_SIZE   = 32}; // Cache line size.
 #define GCC_USED __attribute__((used))
 
 // Variable arguments.
+// UT99_ANDROID_PERF_A_VARARGS: every caller passes ARRAY_COUNT of its own
+// buffer, so bound the write; long log/canvas lines used to overrun the stack.
 #define GET_VARARGS(msg,len,fmt)	\
 {	\
 	va_list ArgPtr;	\
 	va_start( ArgPtr, fmt );	\
-	vsprintf( msg, fmt, ArgPtr );	\
+	vsnprintf( msg, len, fmt, ArgPtr );	\
 	va_end( ArgPtr );	\
 }
 
+// Only appSprintf() uses this, with a fixed 1024 that does not match its
+// callers' buffers, so it stays unbounded like the original.
 #define GET_VARARGS_RESULT(msg,len,fmt,result)	\
 {	\
 	va_list ArgPtr;	\
@@ -198,23 +202,30 @@ extern CORE_API UBOOL GTimestamp;
 extern CORE_API DOUBLE GSecondsPerCycle;
 CORE_API DOUBLE appSecondsSlow();
 //
-// Round a floating point number to an integer.
-// Note that (int+.5) is rounded to (int+1).
-//
-#define DEFINED_appRound 1
-inline INT appRound( FLOAT F )
-{
-	return (INT)(F);
-}
-
-//
 // Converts to integer equal to or less than.
+//
+// UT99_ANDROID_PERF_A_ROUNDING: the old (INT)(F-0.5) returned floor-1 for
+// most positive values (appFloor(2.0)==1), so mesh animation interpolated
+// with alpha 0.5..1.5 and overshot every keyframe. Truncate, then step down
+// for negative fractions; no libm call, so it stays cheap on ARMv7.
 //
 #define DEFINED_appFloor 1
 inline INT appFloor( FLOAT F )
 {
-	static FLOAT Half=0.5;
-	return (INT)(F - Half);
+	INT I = (INT)F;
+	return I - (F < (FLOAT)I);
+}
+
+//
+// Round a floating point number to an integer.
+// Note that (int+.5) is rounded to (int+1).
+//
+// UT99_ANDROID_PERF_A_ROUNDING: the old (INT)F truncated toward zero.
+//
+#define DEFINED_appRound 1
+inline INT appRound( FLOAT F )
+{
+	return appFloor( F + 0.5f );
 }
 
 //

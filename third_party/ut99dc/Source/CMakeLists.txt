@@ -210,7 +210,9 @@ else()
   if(CMAKE_BUILD_TYPE STREQUAL "Debug")
     add_compile_options(-Og -g)
     add_link_options(-g)
-  elseif(LOW_MEMORY)
+  elseif(LOW_MEMORY AND NOT ANDROID)
+    # UT99_ANDROID_PERF_A_O2: LOW_MEMORY only trims data structures on
+    # Android; code size is no constraint there, so optimise for speed.
     add_compile_options(-Os)
   else()
     add_compile_options(-O2)

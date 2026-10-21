@@ -1242,7 +1242,41 @@ public class SDLActivity extends Activity implements View.OnSystemUiVisibilityCh
         // SDLSurface owns onCapturedPointerEvent(). Requesting pointer capture
         // from the parent RelativeLayout can leave ChromeOS sending relative
         // events to a View that never forwards them to SDL.
-        return mSurface != null ? mSurface : mLayout;
+        // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE: every other device keeps the
+        // 2.2.0 capture target.
+        if (mSurface != null && ut99IsChromeOS(null)) {
+            return mSurface;
+        }
+        return mLayout;
+    }
+
+    // UT99_ANDROID_PERF_A_FEATURE_CACHE:
+    // PackageManager.hasSystemFeature() is a synchronous binder call on
+    // Android 4.x (no client-side cache before Android 11). The ChromeOS input
+    // paths used to ask for it several times per MotionEvent/KeyEvent, which
+    // stalled input dispatch on OUYA. A system feature cannot change while the
+    // process runs, so resolve it once.
+    private static volatile int sUt99ChromeOSState = -1; // -1 unknown, 0 no, 1 yes
+
+    public static boolean ut99IsChromeOS(Context context) {
+        final int state = sUt99ChromeOSState;
+        if (state >= 0) {
+            return state == 1;
+        }
+        if (context == null) {
+            context = SDL.getContext();
+        }
+        if (context == null) {
+            return false;
+        }
+        boolean chromeOS = false;
+        try {
+            chromeOS = context.getPackageManager().hasSystemFeature(
+                    "org.chromium.arc.device_management");
+        } catch (Throwable ignored) {
+        }
+        sUt99ChromeOSState = chromeOS ? 1 : 0;
+        return chromeOS;
     }
 
     static class ShowTextInputTask implements Runnable {

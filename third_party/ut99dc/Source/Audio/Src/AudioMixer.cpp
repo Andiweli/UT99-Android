@@ -65,11 +65,23 @@ void* DoSound(void* Arguments)
 				break;
 			case SOUND_PLAYING:
 				// Block until the audio device is writable.
+				// UT99_ANDROID_PERF_A_AUDIO_IDLE: while output is paused (engine
+				// start-up until the viewport exists, shutdown) or the device is
+				// not ready, this case used to loop straight back without
+				// blocking and kept one CPU core at 100%.
 				if (!AudioPaused)
 				{
 					if (AudioWait() == 0)
+					{
+						AudioSleep(5);
 						break;
-				} else break;
+					}
+				}
+				else
+				{
+					AudioSleep(5);
+					break;
+				}
 
 				ALock;
 				// Silence the audio buffer.

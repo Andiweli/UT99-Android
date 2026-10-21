@@ -263,7 +263,10 @@ void AActor::physMovingBrush( FLOAT DeltaTime )
 					// scripted InterpolateTo() path which increments ClientUpdate.
 					// InterpolateEnd() still decrements it, so normalize only this
 					// simulated-proxy bookkeeping after the real callback completed.
-					if( Level && Level->NetMode==NM_Client && Mover->Role<ROLE_Authority )
+					// UT99_ANDROID_PERF_A_MOVER_CHAIN: skip it while InterpolateEnd()
+					// chained to the next key, or multi-key lifts lose their move
+					// sound after the first segment on clients.
+					if( Level && Level->NetMode==NM_Client && Mover->Role<ROLE_Authority && !Mover->bInterpolating )
 					{
 						Mover->ClientUpdate = 0;
 						Mover->RealPosition = Mover->Location;
