@@ -204,16 +204,21 @@ final class Ut99RetroTouchBridge {
         final boolean wasConnected = cachedControllerConnected;
         cachedControllerConnected = true;
         lastControllerReadMs = android.os.SystemClock.uptimeMillis();
+        // UT99_ANDROID_PERF_A_INPUT_TRACE:
+        // This runs for every gamepad key and stick event. Once a controller is
+        // known, RetroTouch is already OFF and the 50 ms poll covers changes, so
+        // skip the per-event log line and state refresh.
+        if (wasConnected) {
+            return;
+        }
         Log.i(TAG, "hardware controller input observed; suppressing RetroTouch");
 
         // First drop only RetroTouch-owned held state, then refresh SDL's device
         // inventory. GameActivity dispatches the physical key/axis immediately
         // after this callback, so the new hardware event wins the handover.
         refreshState(false);
-        if (!wasConnected) {
-            rescanSdlControllers("hardware-input");
-            scheduleSdlControllerRescan();
-        }
+        rescanSdlControllers("hardware-input");
+        scheduleSdlControllerRescan();
     }
 
     void onHardwareDesktopInput() {

@@ -291,32 +291,38 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
         // ChromeOS can append SOURCE_TOUCHPAD or other source bits. Exact
         // equality misroutes those events into SDL's finger/touch path.
+        // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE:
+        // The widened V214 classification is ChromeOS-only. OUYA and every
+        // other device keep the exact 2.2.0 source match, so OUYA touchpad
+        // events take the same mouse/finger route as in 2.2.0.
+        final boolean ut99ChromeOSV218 = SDLActivity.ut99IsChromeOS(getContext());
         final int ut99V214Source = event.getSource();
-        boolean ut99V214MouseLike =
-                (ut99V214Source & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE
-                || (Build.VERSION.SDK_INT >= 26
-                && (ut99V214Source & InputDevice.SOURCE_MOUSE_RELATIVE)
-                == InputDevice.SOURCE_MOUSE_RELATIVE)
-                || (ut99V214Source & InputDevice.SOURCE_TOUCHPAD)
-                == InputDevice.SOURCE_TOUCHPAD;
-        if (!ut99V214MouseLike) {
-            try {
-                final boolean chromeOS = getContext().getPackageManager().hasSystemFeature(
-                        "org.chromium.arc.device_management");
-                final boolean controller =
-                        (ut99V214Source & InputDevice.SOURCE_GAMEPAD)
-                        == InputDevice.SOURCE_GAMEPAD
-                        || (ut99V214Source & InputDevice.SOURCE_JOYSTICK)
-                        == InputDevice.SOURCE_JOYSTICK;
-                ut99V214MouseLike = chromeOS && !controller
-                        && (((ut99V214Source & InputDevice.SOURCE_CLASS_POINTER)
-                        == InputDevice.SOURCE_CLASS_POINTER)
-                        || ((ut99V214Source & InputDevice.SOURCE_CLASS_POSITION)
-                        == InputDevice.SOURCE_CLASS_POSITION));
-            } catch (Throwable ignored) {
-            }
+        boolean ut99V214MouseLike;
+        if (!ut99ChromeOSV218) {
+            ut99V214MouseLike = ut99V214Source == InputDevice.SOURCE_MOUSE
+                    || ut99V214Source == (InputDevice.SOURCE_MOUSE | InputDevice.SOURCE_TOUCHSCREEN);
+        } else {
+            ut99V214MouseLike =
+                    (ut99V214Source & InputDevice.SOURCE_MOUSE) == InputDevice.SOURCE_MOUSE
+                    || (Build.VERSION.SDK_INT >= 26
+                    && (ut99V214Source & InputDevice.SOURCE_MOUSE_RELATIVE)
+                    == InputDevice.SOURCE_MOUSE_RELATIVE)
+                    || (ut99V214Source & InputDevice.SOURCE_TOUCHPAD)
+                    == InputDevice.SOURCE_TOUCHPAD;
         }
-        if (!ut99V214MouseLike && pointerCount > 0) {
+        if (!ut99V214MouseLike && ut99ChromeOSV218) {
+            final boolean controller =
+                    (ut99V214Source & InputDevice.SOURCE_GAMEPAD)
+                    == InputDevice.SOURCE_GAMEPAD
+                    || (ut99V214Source & InputDevice.SOURCE_JOYSTICK)
+                    == InputDevice.SOURCE_JOYSTICK;
+            ut99V214MouseLike = !controller
+                    && (((ut99V214Source & InputDevice.SOURCE_CLASS_POINTER)
+                    == InputDevice.SOURCE_CLASS_POINTER)
+                    || ((ut99V214Source & InputDevice.SOURCE_CLASS_POSITION)
+                    == InputDevice.SOURCE_CLASS_POSITION));
+        }
+        if (!ut99V214MouseLike && ut99ChromeOSV218 && pointerCount > 0) {
             try {
                 ut99V214MouseLike = event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE;
             } catch (Throwable ignored) {
@@ -339,13 +345,6 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
             y = motionListener.getEventY(event);
 
             final boolean relativeMouse = motionListener.inRelativeMode();
-
-            boolean ut99ChromeOSV218 = false;
-            try {
-                ut99ChromeOSV218 = getContext().getPackageManager().hasSystemFeature(
-                        "org.chromium.arc.device_management");
-            } catch (Throwable ignored) {
-            }
 
             // UT99_ANDROID_V79_OUYA_MOUSE_NATIVE_SCALE_FIX:
             // OUYA's touchpad/native mouse cursor reports coordinates in the
@@ -445,8 +444,9 @@ public class SDLSurface extends SurfaceView implements SurfaceHolder.Callback,
         // ARC may send cursor motion through View.dispatchHoverEvent() without
         // invoking the generic-motion listener used by SDL. Forward it through
         // that listener explicitly so menu hover and the first gameplay motion
-        // reach Android_OnMouse.
-        if (event != null) {
+        // reach Android_OnMouse. UT99_ANDROID_PERF_A_CHROMEOS_SCOPE: ARC only;
+        // other devices reach the same listener through generic motion.
+        if (event != null && SDLActivity.ut99IsChromeOS(getContext())) {
             try {
                 if (SDLActivity.getMotionListener().onGenericMotion(this, event)) {
                     return true;

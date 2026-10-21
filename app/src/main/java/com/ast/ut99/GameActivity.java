@@ -119,12 +119,25 @@ public class GameActivity extends SDLActivity {
     private boolean legacySafeMode;
     private Ut99RetroTouchBridge ut99RetroTouchBridge;
 
+    // UT99_ANDROID_PERF_A_FEATURE_CACHE:
+    // hasSystemFeature() is a binder call on Android 4.x. These checks run from
+    // input dispatch, immersive re-apply and the RetroTouch poll, so resolve
+    // each feature once per process. -1 unknown, 0 no, 1 yes.
+    private static volatile int sUt99AutomotiveState = -1;
+    private static volatile int sUt99TouchscreenState = -1;
+
     private boolean isAutomotiveDevice() {
-        try {
-            return getPackageManager().hasSystemFeature("android.hardware.type.automotive");
-        } catch (Throwable ignored) {
-            return false;
+        int state = sUt99AutomotiveState;
+        if (state < 0) {
+            boolean automotive = false;
+            try {
+                automotive = getPackageManager().hasSystemFeature("android.hardware.type.automotive");
+            } catch (Throwable ignored) {
+            }
+            state = automotive ? 1 : 0;
+            sUt99AutomotiveState = state;
         }
+        return state == 1;
     }
 
     private File resolveDataRootForGame() {
@@ -1040,10 +1053,18 @@ public class GameActivity extends SDLActivity {
     }
 
     boolean ut99RetroTouchHasTouchscreen() {
+        // Retroid-class handhelds expose both a touchscreen and an integrated
+        // GAMEPAD/JOYSTICK. RetroTouch must remain available there. OUYA and
+        // non-touch ChromeOS/TV devices stay clean because they report no touch.
+        if (isAutomotiveDevice()) return true;
+        final int state = sUt99TouchscreenState;
+        if (state >= 0) return state == 1;
         try {
-            if (isAutomotiveDevice()) return true;
             android.content.pm.PackageManager pm = getPackageManager();
-            return pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN);
+            final boolean touchscreen =
+                    pm.hasSystemFeature(android.content.pm.PackageManager.FEATURE_TOUCHSCREEN);
+            sUt99TouchscreenState = touchscreen ? 1 : 0;
+            return touchscreen;
         } catch (Throwable t) {
             return true;
         }
@@ -1101,11 +1122,8 @@ public class GameActivity extends SDLActivity {
     }
 
     private boolean ut99IsChromeOSV211() {
-        try {
-            return getPackageManager().hasSystemFeature("org.chromium.arc.device_management");
-        } catch (Throwable ignored) {
-            return false;
-        }
+        // UT99_ANDROID_PERF_A_FEATURE_CACHE: resolved once, see SDLActivity.
+        return SDLActivity.ut99IsChromeOS(this);
     }
 
     private static boolean ut99IsExternalInputDeviceV211(android.view.InputDevice device) {
@@ -1212,6 +1230,39 @@ public class GameActivity extends SDLActivity {
 
     private boolean isPhysicalMouseEventV210(android.view.MotionEvent event) {
         if (event == null) return false;
+        final int source = event.getSource();
+        // UT99_ANDROID_PERF_A_FEATURE_CACHE:
+        // Stick/trigger events are the most frequent MotionEvents on OUYA and
+        // are never a mouse. Reject them before any device lookup.
+        if ((source & android.view.InputDevice.SOURCE_CLASS_JOYSTICK)
+                == android.view.InputDevice.SOURCE_CLASS_JOYSTICK) return false;
+        final boolean chromeOS = ut99IsChromeOSV211();
+        boolean mouseLike = (source & android.view.InputDevice.SOURCE_MOUSE)
+                == android.view.InputDevice.SOURCE_MOUSE;
+        if (!mouseLike && android.os.Build.VERSION.SDK_INT >= 26
+                && (source & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
+                == android.view.InputDevice.SOURCE_MOUSE_RELATIVE) mouseLike = true;
+        // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
+        // ARC can keep SOURCE_TOUCHPAD (or combine it with SOURCE_MOUSE) on
+        // generic-motion events instead of presenting an exact SOURCE_MOUSE.
+        if (!mouseLike && chromeOS
+                && (source & android.view.InputDevice.SOURCE_TOUCHPAD)
+                == android.view.InputDevice.SOURCE_TOUCHPAD) mouseLike = true;
+        if (!mouseLike && chromeOS
+                && !isAndroidGamepadSourceV47(event)
+                && (((source & android.view.InputDevice.SOURCE_CLASS_POINTER)
+                == android.view.InputDevice.SOURCE_CLASS_POINTER)
+                || ((source & android.view.InputDevice.SOURCE_CLASS_POSITION)
+                == android.view.InputDevice.SOURCE_CLASS_POSITION))) mouseLike = true;
+        if (!mouseLike) {
+            try {
+                mouseLike = event.getPointerCount() > 0
+                        && event.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_MOUSE;
+            } catch (Throwable ignored) {
+                return false;
+            }
+        }
+        if (!mouseLike) return false;
         try {
             // UT99_ANDROID_CHROMEOS_VIRTUAL_HID_BYPASS_V213:
             // ChromeOS/ARC frequently presents a physical mouse or trackpad as a
@@ -1219,34 +1270,11 @@ public class GameActivity extends SDLActivity {
             // still lets a separate click path through, producing an invisible
             // cursor that flashes only when clicked.  Keep the Retroid software
             // cursor safeguard on Android handhelds, never on confirmed ARC.
-            if (!ut99IsChromeOSV211()
+            if (!chromeOS
                     && ut99IsSoftwareVirtualDesktopDeviceV212(event.getDevice())) return false;
         } catch (Throwable ignored) {
         }
-        final int source = event.getSource();
-        if ((source & android.view.InputDevice.SOURCE_MOUSE)
-                == android.view.InputDevice.SOURCE_MOUSE) return true;
-        if (android.os.Build.VERSION.SDK_INT >= 26
-                && (source & android.view.InputDevice.SOURCE_MOUSE_RELATIVE)
-                == android.view.InputDevice.SOURCE_MOUSE_RELATIVE) return true;
-        // UT99_ANDROID_CHROMEOS_TOUCHPAD_SOURCE_V214:
-        // ARC can keep SOURCE_TOUCHPAD (or combine it with SOURCE_MOUSE) on
-        // generic-motion events instead of presenting an exact SOURCE_MOUSE.
-        if (ut99IsChromeOSV211()
-                && (source & android.view.InputDevice.SOURCE_TOUCHPAD)
-                == android.view.InputDevice.SOURCE_TOUCHPAD) return true;
-        if (ut99IsChromeOSV211()
-                && !isAndroidGamepadSourceV47(event)
-                && (((source & android.view.InputDevice.SOURCE_CLASS_POINTER)
-                == android.view.InputDevice.SOURCE_CLASS_POINTER)
-                || ((source & android.view.InputDevice.SOURCE_CLASS_POSITION)
-                == android.view.InputDevice.SOURCE_CLASS_POSITION))) return true;
-        try {
-            return event.getPointerCount() > 0
-                    && event.getToolType(0) == android.view.MotionEvent.TOOL_TYPE_MOUSE;
-        } catch (Throwable ignored) {
-            return false;
-        }
+        return true;
     }
 
     private static boolean ut99HasPointerCaptureV210() {
@@ -1301,7 +1329,19 @@ public class GameActivity extends SDLActivity {
                 || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_MODE;
     }
 
+    // UT99_ANDROID_PERF_A_INPUT_TRACE:
+    // Per-key/per-axis logcat lines build strings on every input event (Dalvik
+    // GC churn on OUYA). Set to true only while debugging input routing.
+    private static final boolean UT99_INPUT_TRACE = false;
+
+    // Build.* never changes at runtime; evaluated once instead of per input event.
+    private static final boolean UT99_IS_OUYA_DEVICE_V108 = computeIsOuyaDeviceV108();
+
     private static boolean isOuyaDeviceV108() {
+        return UT99_IS_OUYA_DEVICE_V108;
+    }
+
+    private static boolean computeIsOuyaDeviceV108() {
         // UT99_ANDROID_V108_OUYA_INPUT_REPAIR:
         // Keep the fixes strictly scoped to OUYA/Android 4 console-class devices
         // so Retroid/modern Android controller and touch behaviour stays unchanged.
@@ -1351,18 +1391,18 @@ public class GameActivity extends SDLActivity {
                         || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT)) {
                     // OUYA sends D-Pad through both Android key events and SDL.
                     // Let SDL own it to avoid double menu steps.
-                    android.util.Log.i("UT99Android", "UT99_ANDROID_V108_OUYA_DPAD pass-through key=" + keyCode);
+                    if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V108_OUYA_DPAD pass-through key=" + keyCode);
                     return super.dispatchKeyEvent(event);
                 }
                 if (action == android.view.KeyEvent.ACTION_DOWN && event.getRepeatCount() > 0
                         && (keyCode == android.view.KeyEvent.KEYCODE_BUTTON_START
                         || keyCode == android.view.KeyEvent.KEYCODE_MENU
                         || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_MODE)) {
-                    android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY ignored repeated START/MENU key=" + keyCode);
+                    if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY ignored repeated START/MENU key=" + keyCode);
                     return true;
                 }
                 nativeAndroidButtonV47(keyCode, action == android.view.KeyEvent.ACTION_DOWN);
-                android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY key=" + keyCode + " down=" + (action == android.view.KeyEvent.ACTION_DOWN));
+                if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V72_KEY key=" + keyCode + " down=" + (action == android.view.KeyEvent.ACTION_DOWN));
                 return true;
             }
         }
@@ -1376,6 +1416,16 @@ public class GameActivity extends SDLActivity {
         // Activity/DecorView instead of the SDL Surface's generic-motion
         // listener. Route real mouse input into SDL exactly once and keep
         // MOUSE|TOUCHSCREEN devices out of RetroTouch's touch path.
+        // UT99_ANDROID_PERF_A_CHROMEOS_SCOPE:
+        // ARC only. Elsewhere this route bypassed SDL's motion listener and its
+        // ut99V116 view->surface hover scaling, so the OUYA touchpad hovered in
+        // view coordinates but clicked in surface coordinates.
+        if (!ut99IsChromeOSV211()) {
+            if (ut99RetroTouchBridge != null && isPhysicalMouseEventV210(event)) {
+                ut99RetroTouchBridge.onHardwareDesktopInput();
+            }
+            return super.dispatchGenericMotionEvent(event);
+        }
         if (isPhysicalMouseEventV210(event)) {
             if (ut99RetroTouchBridge != null) {
                 ut99RetroTouchBridge.onHardwareDesktopInput();
@@ -1469,7 +1519,7 @@ public class GameActivity extends SDLActivity {
             nativeAndroidAxisV47(android.view.MotionEvent.AXIS_RTRIGGER, event.getAxisValue(android.view.MotionEvent.AXIS_RTRIGGER));
             nativeAndroidAxisV47(android.view.MotionEvent.AXIS_HAT_X, event.getAxisValue(android.view.MotionEvent.AXIS_HAT_X));
             nativeAndroidAxisV47(android.view.MotionEvent.AXIS_HAT_Y, event.getAxisValue(android.view.MotionEvent.AXIS_HAT_Y));
-            android.util.Log.i("UT99Android", "UT99_ANDROID_V109_AXIS lx=" + lx
+            if (UT99_INPUT_TRACE) android.util.Log.i("UT99Android", "UT99_ANDROID_V109_AXIS lx=" + lx
                     + " ly=" + ly
                     + " rx=" + rx
                     + " ry=" + ry
@@ -1902,10 +1952,12 @@ public class GameActivity extends SDLActivity {
         // RetroTouch must see the current native menu state before a fresh pointer
         // is dispatched, otherwise the first UWindow tap after opening a menu can
         // be consumed by a stale GAMEPLAY mode.
-        if (ut99RetroTouchBridge != null && isPhysicalMouseEventV210(ev)) {
-            ut99RetroTouchBridge.onHardwareDesktopInput();
-        } else if (ut99RetroTouchBridge != null) {
-            ut99RetroTouchBridge.beforeHostTouch(ev);
+        if (ut99RetroTouchBridge != null) {
+            if (isPhysicalMouseEventV210(ev)) {
+                ut99RetroTouchBridge.onHardwareDesktopInput();
+            } else {
+                ut99RetroTouchBridge.beforeHostTouch(ev);
+            }
         }
         // v60: no low-res touch rescaling. Touch/mouse events stay in native
         // SurfaceView coordinates so SDL and Unreal see the same drawable size.
@@ -1925,6 +1977,15 @@ public class GameActivity extends SDLActivity {
             // a RetroTouch target, therefore do not add the overlay View at all.
             if (ut99IsChromeOSV211()) {
                 Log.i(TAG, "UT99_ANDROID_CHROMEOS_NO_OVERLAY_VIEW_V215 skipped RetroTouch attachment");
+                return;
+            }
+            // UT99_ANDROID_PERF_A_RETROTOUCH_TOUCH_ONLY:
+            // The overlay can only ever become visible on a touchscreen device.
+            // Without one (OUYA, Android TV) the bridge only polled the native
+            // state every 50 ms, queried PackageManager and re-read up to four INI
+            // files every 650 ms on the UI thread for the whole session.
+            if (!ut99RetroTouchHasTouchscreen()) {
+                Log.i(TAG, "UT99_ANDROID_PERF_A_RETROTOUCH_TOUCH_ONLY skipped RetroTouch attachment: no touchscreen");
                 return;
             }
             ut99V91EnsureTouchOverlayConfigDefault();
