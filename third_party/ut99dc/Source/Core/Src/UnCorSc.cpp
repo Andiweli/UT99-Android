@@ -242,6 +242,27 @@ void UObject::execDefaultVariable( FFrame& Stack, RESULT_DECL )
 }
 IMPLEMENT_FUNCTION( UObject, EX_DefaultVariable, execDefaultVariable );
 
+//
+// UT99_ANDROID_PERF_A_64BIT_NONE: the zero-fill size after a None context is
+// baked into 32-bit bytecode (4 for objects, 12 for strings). On arm64 those
+// are 8 and 16 bytes, so "X = None.Obj" left the upper half of X untouched
+// and scripts saw a dangling, non-None reference. When the skipped expression
+// reads a property directly, fill that property's real size; the non-None
+// path copies exactly that many bytes, so every result buffer already fits.
+//
+static INT UT99AndroidContextFillSizePerfA( const BYTE* Code, INT FillSize )
+{
+	if( sizeof(void*) <= sizeof(INT) )
+		return FillSize;
+	BYTE Token = Code[0];
+	if( Token!=EX_InstanceVariable && Token!=EX_DefaultVariable && Token!=EX_StructMember )
+		return FillSize;
+	INT Index;
+	appMemcpy( &Index, Code+1, sizeof(INT) );
+	UProperty* Property = Cast<UProperty>( UObject::GetIndexedObject(Index) );
+	return Property ? Max<INT>( FillSize, Property->ElementSize ) : FillSize;
+}
+
 void UObject::execClassContext( FFrame& Stack, RESULT_DECL )
 {
 	guard(UObject::execClassContext);
@@ -261,11 +282,12 @@ void UObject::execClassContext( FFrame& Stack, RESULT_DECL )
 		Stack.Logf( TEXT("Accessed null class context") );
 		INT wSkip = Stack.ReadWord();
 		BYTE bSize = *Stack.Code++;
+		INT FillSize = UT99AndroidContextFillSizePerfA( Stack.Code, bSize );
 		Stack.Code += wSkip;
 		GPropAddr = NULL;
 		GProperty = NULL;
 		if( Result )
-			appMemzero( Result, bSize );
+			appMemzero( Result, FillSize );
 	}
 	unguardexec;
 }
@@ -646,11 +668,12 @@ void UObject::execContext( FFrame& Stack, RESULT_DECL )
 		Stack.Logf( TEXT("Accessed None") );
 		INT wSkip = Stack.ReadWord();
 		BYTE bSize = *Stack.Code++;
+		INT FillSize = UT99AndroidContextFillSizePerfA( Stack.Code, bSize );
 		Stack.Code += wSkip;
 		GPropAddr = NULL;
 		GProperty = NULL;
 		if( Result )
-			appMemzero( Result, bSize );
+			appMemzero( Result, FillSize );
 	}
 	unguardexecSlow;
 }
@@ -1008,7 +1031,10 @@ void UObject::execFloatToByte( FFrame& Stack, RESULT_DECL )
 	guardSlow(UObject::execFloatToByte);
 	FLOAT F=0.f;
 	Stack.Step( Stack.Object, &F );
-	*(BYTE*)Result = (BYTE)F;
+	// UT99_ANDROID_PERF_A_FLOAT_TO_BYTE: a direct float->BYTE cast is undefined
+	// outside 0..255 and clamps to 0 on ARM; go through INT so out-of-range
+	// values wrap like the x86 original.
+	*(BYTE*)Result = (BYTE)(INT)F;
 	unguardexecSlow;
 }
 IMPLEMENT_FUNCTION( UObject, EX_FloatToByte, execFloatToByte );
