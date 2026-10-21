@@ -47,8 +47,8 @@ android {
 
     defaultConfig {
         targetSdk 35
-        versionCode 18
-        versionName '2.2.1'
+        versionCode 19
+        versionName '2.3.0'
 
         ndk {
             abiFilters 'armeabi-v7a', 'arm64-v8a'
