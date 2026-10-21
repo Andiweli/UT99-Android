@@ -39,7 +39,20 @@ public class GameActivity extends SDLActivity {
     private int ut99V212LastDesktopInputReason = Integer.MIN_VALUE;
 
     public static void ut99SetImeWanted(boolean wanted) {
+        final boolean wasWanted = sUt99ImeWanted;
         sUt99ImeWanted = wanted;
+        // UT99_ANDROID_PERF_A_IMMERSIVE:
+        // Hiding a stale IME used to happen as a side effect of the (very
+        // frequent) immersive re-apply. Do it once when native code drops the
+        // keyboard request instead.
+        if (wasWanted && !wanted) {
+            final GameActivity activity = sUt99V64ActivityRef != null ? sUt99V64ActivityRef.get() : null;
+            if (activity != null) {
+                activity.runOnUiThread(new Runnable() {
+                    @Override public void run() { activity.ut99V76HideImeUnlessRequested(); }
+                });
+            }
+        }
     }
 
     public static boolean ut99IsImeWanted() {
@@ -372,13 +385,8 @@ public class GameActivity extends SDLActivity {
 
         View decor = window.getDecorView();
         if (decor != null) {
-            decor.setSystemUiVisibility(
-                    View.SYSTEM_UI_FLAG_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            | View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                            | View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                            | View.SYSTEM_UI_FLAG_LAYOUT_STABLE);
+            // UT99_ANDROID_PERF_A_IMMERSIVE: no HIDE_NAVIGATION below API 19.
+            decor.setSystemUiVisibility(ut99ImmersiveUiFlags());
         }
     }
 
@@ -958,15 +966,7 @@ public class GameActivity extends SDLActivity {
             getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
                     android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
             android.view.View decor = getWindow().getDecorView();
-            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            if (android.os.Build.VERSION.SDK_INT >= 19) {
-                flags |= android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-            }
-            decor.setSystemUiVisibility(flags);
+            decor.setSystemUiVisibility(ut99ImmersiveUiFlags()); // UT99_ANDROID_PERF_A_IMMERSIVE
         } catch (Throwable ignored) {
         }
     }
@@ -1529,30 +1529,31 @@ public class GameActivity extends SDLActivity {
         return super.onGenericMotionEvent(event);
     }
 
+    // UT99_ANDROID_PERF_A_IMMERSIVE:
+    // Android < 4.4 (API 19) has no IMMERSIVE_STICKY. There
+    // SYSTEM_UI_FLAG_HIDE_NAVIGATION makes the system place a full-screen input
+    // consumer above the app that swallows the next pointer event (OUYA
+    // touchpad hover/click) and then clears the flags again. Re-applying it
+    // after every change grew into hundreds of window relayouts per second on
+    // OUYA. Below API 19 the window FLAG_FULLSCREEN hides the status bar on its
+    // own (OUYA has no navigation bar), which is also what stock SDL does.
+    private static int ut99ImmersiveUiFlags() {
+        int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
+                | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
+        if (android.os.Build.VERSION.SDK_INT >= 19) {
+            flags |= android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                    | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION;
+        }
+        return flags;
+    }
+
     // UT99_ANDROID_V50_IMMERSIVE
     private void ut99V50Immersive() {
         if (isAutomotiveDevice()) return;
-        try {
-            getWindow().setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            android.view.View decor = getWindow().getDecorView();
-            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            if (android.os.Build.VERSION.SDK_INT >= 19) {
-                flags |= android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY;
-            }
-            decor.setSystemUiVisibility(flags);
-            // UT99_ANDROID_V72_UI_EDIT_FOCUS_KEYBOARD:
-            // Do not hide the IME from immersive re-apply. SDL_StopTextInput()
-            // is now responsible for closing it when the user taps outside an
-            // edit field.
-            android.util.Log.i("UT99Android", "UT99_ANDROID_V50_IMMERSIVE");
-        } catch (Throwable t) {
-            android.util.Log.e("UT99Android", "v50 immersive failed", t);
-        }
+        ut99V52HardImmersive();
+        android.util.Log.i("UT99Android", "UT99_ANDROID_V50_IMMERSIVE");
     }
 
 
@@ -1560,30 +1561,46 @@ public class GameActivity extends SDLActivity {
 
     // UT99_ANDROID_V52_IMMERSIVE_HARD
     private android.os.Handler ut99V52Handler;
+    private boolean ut99V52ListenerInstalled;
+    private boolean ut99V52InsetsApplied;
+    private final Runnable ut99V52ImmersiveCheck = new Runnable() {
+        @Override public void run() { ut99V52HardImmersive(); }
+    };
 
     private void ut99V52HardImmersive() {
         if (isAutomotiveDevice()) return;
         try {
+            // UT99_ANDROID_PERF_A_IMMERSIVE:
+            // Idempotent: Window.setFlags()/setAttributes() always trigger a
+            // window relayout, even for unchanged values, so only touch what is
+            // actually missing.
             final android.view.Window w = getWindow();
-            w.setFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN,
-                    android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN);
-            w.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
-            if (android.os.Build.VERSION.SDK_INT >= 28) {
-                android.view.WindowManager.LayoutParams lp = w.getAttributes();
+            if (w == null) return;
+            boolean changed = false;
+            final android.view.WindowManager.LayoutParams lp = w.getAttributes();
+            final int windowFlags = android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN
+                    | android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON;
+            if ((lp.flags & windowFlags) != windowFlags) {
+                w.addFlags(windowFlags);
+                changed = true;
+            }
+            if (android.os.Build.VERSION.SDK_INT >= 28
+                    && lp.layoutInDisplayCutoutMode
+                    != android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES) {
                 lp.layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES;
                 w.setAttributes(lp);
+                changed = true;
             }
 
             final android.view.View decor = w.getDecorView();
-            int flags = android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_HIDE_NAVIGATION
-                    | android.view.View.SYSTEM_UI_FLAG_LAYOUT_STABLE;
-            decor.setSystemUiVisibility(flags);
+            final int flags = ut99ImmersiveUiFlags();
+            final boolean uiFlagsMissing = (decor.getSystemUiVisibility() & flags) != flags;
+            if (uiFlagsMissing) {
+                decor.setSystemUiVisibility(flags);
+                changed = true;
+            }
 
-            if (android.os.Build.VERSION.SDK_INT >= 30) {
+            if (android.os.Build.VERSION.SDK_INT >= 30 && (uiFlagsMissing || !ut99V52InsetsApplied)) {
                 try {
                     w.setDecorFitsSystemWindows(false);
                     android.view.WindowInsetsController c = decor.getWindowInsetsController();
@@ -1591,44 +1608,54 @@ public class GameActivity extends SDLActivity {
                         c.hide(android.view.WindowInsets.Type.statusBars() | android.view.WindowInsets.Type.navigationBars());
                         c.setSystemBarsBehavior(android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE);
                     }
+                    ut99V52InsetsApplied = true;
                 } catch (Throwable ignored) {}
             }
 
-            // UT99_ANDROID_V76_KEYBOARD_START_SAFE:
-            // Keep the soft keyboard alive only while native UWindow edit handling requested it.
-            ut99V76HideImeUnlessRequested();
+            // UT99_ANDROID_V76_KEYBOARD_START_SAFE: stale IME hiding no longer
+            // rides on every immersive pass; see ut99SetImeWanted()/onResume.
 
-            if (java.lang.System.currentTimeMillis() % 1000 < 40) if (java.lang.System.currentTimeMillis() % 1000 < 40) android.util.Log.i("UT99Android", "UT99_ANDROID_V52_IMMERSIVE_HARD"); /* UT99_ANDROID_V54_REDUCE_IMMERSIVE_LOG_SPAM */ /* UT99_ANDROID_V54_REDUCE_IMMERSIVE_LOG_SPAM */
+            if (changed) {
+                android.util.Log.i("UT99Android", "UT99_ANDROID_V52_IMMERSIVE_HARD reapplied ui=0x"
+                        + Integer.toHexString(flags));
+            }
         } catch (Throwable t) {
             android.util.Log.e("UT99Android", "v52 immersive failed", t);
         }
     }
 
-    private void ut99V52ScheduleImmersive() {
-        if (isAutomotiveDevice()) return;
+    private void ut99V52RequestImmersiveCheck(long delayMs) {
         if (ut99V52Handler == null) {
             ut99V52Handler = new android.os.Handler(android.os.Looper.getMainLooper());
         }
+        // Coalesced: there is never more than one pending check.
+        ut99V52Handler.removeCallbacks(ut99V52ImmersiveCheck);
+        ut99V52Handler.postDelayed(ut99V52ImmersiveCheck, delayMs);
+    }
+
+    private void ut99V52ScheduleImmersive() {
+        if (isAutomotiveDevice()) return;
         ut99V52HardImmersive();
-        final int[] delays = new int[]{50, 150, 350, 750, 1500, 3000};
-        for (int d : delays) {
-            ut99V52Handler.postDelayed(new Runnable() {
-                @Override public void run() { ut99V52HardImmersive(); }
-            }, d);
-        }
-        try {
-            getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(
-                new android.view.View.OnSystemUiVisibilityChangeListener() {
-                    @Override public void onSystemUiVisibilityChange(int visibility) {
-                        if (ut99V52Handler != null) {
-                            ut99V52Handler.postDelayed(new Runnable() {
-                                @Override public void run() { ut99V52HardImmersive(); }
-                            }, 80);
+        // One deferred re-check catches bars the system re-shows asynchronously
+        // after focus/resume. It only re-applies if something was really lost.
+        ut99V52RequestImmersiveCheck(500);
+        if (!ut99V52ListenerInstalled) {
+            try {
+                getWindow().getDecorView().setOnSystemUiVisibilityChangeListener(
+                    new android.view.View.OnSystemUiVisibilityChangeListener() {
+                        @Override public void onSystemUiVisibilityChange(int visibility) {
+                            final boolean lost = (visibility & android.view.View.SYSTEM_UI_FLAG_FULLSCREEN) == 0
+                                    || (android.os.Build.VERSION.SDK_INT >= 19
+                                    && (visibility & android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION) == 0);
+                            if (lost) {
+                                ut99V52RequestImmersiveCheck(300);
+                            }
                         }
                     }
-                }
-            );
-        } catch (Throwable ignored) {}
+                );
+                ut99V52ListenerInstalled = true;
+            } catch (Throwable ignored) {}
+        }
     }
 
 
@@ -1706,7 +1733,11 @@ public class GameActivity extends SDLActivity {
     public void onUserInteraction() {
         /* UT99_ANDROID_V56_INPUT_SAFE_FIXED_SURFACE: disabled v55 userInteraction surface reapply */
         super.onUserInteraction();
-        ut99V52ScheduleImmersive(); // v52 userInteraction
+        // UT99_ANDROID_PERF_A_IMMERSIVE: one coalesced, idempotent check instead
+        // of an immediate re-apply plus six delayed ones for every input event.
+        if (!isAutomotiveDevice()) {
+            ut99V52RequestImmersiveCheck(500); // v52 userInteraction
+        }
     }
 
 
@@ -1984,8 +2015,10 @@ public class GameActivity extends SDLActivity {
             // Without one (OUYA, Android TV) the bridge only polled the native
             // state every 50 ms, queried PackageManager and re-read up to four INI
             // files every 650 ms on the UI thread for the whole session.
-            if (!ut99RetroTouchHasTouchscreen()) {
-                Log.i(TAG, "UT99_ANDROID_PERF_A_RETROTOUCH_TOUCH_ONLY skipped RetroTouch attachment: no touchscreen");
+            // OUYA reports FEATURE_TOUCHSCREEN although it only has the
+            // controller touchpad, so exclude it explicitly.
+            if (!ut99RetroTouchHasTouchscreen() || isOuyaDeviceV108()) {
+                Log.i(TAG, "UT99_ANDROID_PERF_A_RETROTOUCH_TOUCH_ONLY skipped RetroTouch attachment: no real touchscreen");
                 return;
             }
             ut99V91EnsureTouchOverlayConfigDefault();
