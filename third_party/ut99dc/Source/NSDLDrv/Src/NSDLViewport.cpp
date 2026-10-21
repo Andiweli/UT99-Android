@@ -619,6 +619,10 @@ static DOUBLE GUT99V111LastGameplayMotionLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE
 static DOUBLE GUT99V111LastSuppressTouchLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_GAMEPLAY_V111
 static UBOOL GUT99V113NativeMouseSeen = 0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
 static UBOOL GUT99V113NativeMouseCaptureActive = 0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
+// UT99_ANDROID_PERF_A_CAPTURE_RETRY: gameplay with a known native mouse. Keeps
+// synthetic touch suppressed in gameplay even where relative capture is
+// unsupported (OUYA), as 2.2.0 did by claiming capture unconditionally.
+static UBOOL GUT99V113NativeMouseGameplayModePerfA = 0;
 static DOUBLE GUT99V113LastRelativeMotionLog = 0.0; // UT99_ANDROID_NATIVE_MOUSE_RELATIVE_CAPTURE_V113
 // UT99_ANDROID_CHROMEOS_MOUSE_FRAMEPACED_FLOAT_V210
 // Parallel SDL Android event carrying 20.12 fixed-point relative mouse motion.
@@ -753,7 +757,7 @@ static UBOOL UT99AndroidShouldSuppressSyntheticTouchV111()
     const DOUBLE Now = appSeconds();
     if( Now < GUT99V111SuppressSyntheticTouchUntil )
         return 1;
-    if( GUT99V113NativeMouseCaptureActive && GUT99V113NativeMouseSeen )
+    if( ( GUT99V113NativeMouseCaptureActive || GUT99V113NativeMouseGameplayModePerfA ) && GUT99V113NativeMouseSeen )
         return 1;
     if( GUT99V115LastNativeMouseActivity > 0.0 && ( Now - GUT99V115LastNativeMouseActivity ) < 2.50 )
         return 1;
@@ -4484,28 +4488,53 @@ void UNSDLViewport::AndroidUpdateNativeMouseCaptureV113( UBOOL bMenuMode )
 	// window border.  Once a real mouse was seen, capture it only during gameplay:
 	// SDL relative mode hides/locks the pointer and gives us infinite xrel/yrel.
 	const UBOOL WantCapture = ( !bMenuMode && GUT99V113NativeMouseSeen && hWnd ) ? 1 : 0;
+	GUT99V113NativeMouseGameplayModePerfA = WantCapture; // UT99_ANDROID_PERF_A_CAPTURE_RETRY
 	if( WantCapture != GUT99V113NativeMouseCaptureActive )
 	{
 		if( WantCapture )
 		{
+			// UT99_ANDROID_PERF_A_CAPTURE_RETRY:
+			// Below Android 7 (API 24, e.g. OUYA/Android 4.1) SDL has no relative
+			// mouse mode at all. Since V214 a rejected capture left the flag clear,
+			// so this block ran again on every gameplay frame after the first
+			// touchpad/mouse event: cursor JNI calls, a logcat line, a reset of the
+			// absolute-delta look fallback (touchpad look never moved) and a
+			// refreshed touch-suppression window. Remember a permanent rejection
+			// and throttle retries where capture may still succeed later (ARC
+			// focus changes), keeping the absolute-delta fallback untouched.
+			static UBOOL  GUT99AndroidCaptureUnsupportedPerfA = 0;
+			static DOUBLE GUT99AndroidCaptureRetryAfterPerfA = 0.0;
+			if( GUT99AndroidCaptureUnsupportedPerfA )
+				return;
+			const DOUBLE NowPerfA = appSeconds();
+			if( NowPerfA < GUT99AndroidCaptureRetryAfterPerfA )
+				return;
+
 			SDL_ShowCursor( SDL_DISABLE );
 			SDL_SetWindowGrab( hWnd, SDL_TRUE );
 			const INT RelResult = SDL_SetRelativeMouseMode( SDL_TRUE );
-			GUT99V111NativeMouseHadLast = 0;
-			for( INT i=0; i<8; ++i ) GUT99V115MenuButtonDownValid[i] = 0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
-			UT99AndroidMarkNativeMouseActivityV111(); // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
 			// UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214:
 			// Do not claim capture when Android/ChromeOS rejected it. Leaving the
 			// flag clear keeps the existing absolute-delta gameplay fallback alive
 			// and lets later ticks retry after the Surface gains focus.
 			GUT99V113NativeMouseCaptureActive =
 				( RelResult == 0 && SDL_GetRelativeMouseMode() ) ? 1 : 0;
-			if( !GUT99V113NativeMouseCaptureActive )
+			if( GUT99V113NativeMouseCaptureActive )
+			{
+				GUT99V111NativeMouseHadLast = 0;
+				for( INT i=0; i<8; ++i ) GUT99V115MenuButtonDownValid[i] = 0; // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
+				UT99AndroidMarkNativeMouseActivityV111(); // UT99_ANDROID_NATIVE_MOUSE_MENU_CLICK_STABLE_V115
+			}
+			else
 			{
 				SDL_SetWindowGrab( hWnd, SDL_FALSE );
 				SDL_ShowCursor( SDL_ENABLE );
+				if( SDL_GetAndroidSDKVersion() < 24 )
+					GUT99AndroidCaptureUnsupportedPerfA = 1;
+				else
+					GUT99AndroidCaptureRetryAfterPerfA = NowPerfA + 0.50;
 			}
-			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214 enabled result=%d active=%d viewport=%dx%d", RelResult, GUT99V113NativeMouseCaptureActive ? 1 : 0, SizeX, SizeY );
+			UT99_ANDROID_SDL_LOGI( "UT99_ANDROID_CHROMEOS_CAPTURE_RESULT_V214 enabled result=%d active=%d unsupported=%d viewport=%dx%d", RelResult, GUT99V113NativeMouseCaptureActive ? 1 : 0, GUT99AndroidCaptureUnsupportedPerfA ? 1 : 0, SizeX, SizeY );
 		}
 		else
 		{
