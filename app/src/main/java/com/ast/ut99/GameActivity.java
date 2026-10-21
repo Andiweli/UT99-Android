@@ -842,6 +842,14 @@ public class GameActivity extends SDLActivity {
         return null;
     }
 
+    private static String ut99V166DefaultResolutionMode() {
+        // UT99_ANDROID_PERF_A_OUYA_720P:
+        // OUYA reports a 1920x1080 display, but Tegra 3 cannot fill 1080p at a
+        // playable frame rate. Without a saved choice start OUYA at 720p; an
+        // explicit selection (including Native) is always respected.
+        return isOuyaDeviceV108() ? "1280x720" : "Native";
+    }
+
     private String ut99V166ReadResolutionMode() {
         // UT99_ANDROID_V166C_RESOLUTION_PERSIST:
         // Keep the user's selected render resolution in Android SharedPreferences as
@@ -857,7 +865,7 @@ public class GameActivity extends SDLActivity {
         }
 
         java.io.File root = getUt99ConfigRootV63();
-        if (root == null) return "Native";
+        if (root == null) return ut99V166DefaultResolutionMode();
         java.io.File systemDir = new java.io.File(root, "System");
         java.io.File[] candidates = new java.io.File[] {
                 new java.io.File(systemDir, "AndroidUT99.ini"),
@@ -879,7 +887,7 @@ public class GameActivity extends SDLActivity {
                 android.util.Log.w("UT99Android", "v166 could not read resolution mode from " + ini.getAbsolutePath(), t);
             }
         }
-        return "Native";
+        return ut99V166DefaultResolutionMode();
     }
 
     private void ut99V166WriteResolutionModePrefs(String mode) {

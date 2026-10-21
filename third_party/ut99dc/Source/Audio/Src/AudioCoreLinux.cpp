@@ -52,6 +52,24 @@ void* GetAudioBuffer()
 
 static SDL_AudioDeviceID AndroidAudioDevice = 0;
 
+// UT99_ANDROID_PERF_A_AUDIO_WAIT:
+// Wait until at most two mixed buffers remain queued. Sleep for roughly the
+// time the surplus needs to play out instead of waking up every millisecond
+// (about a thousand wake-ups and SDL device locks per second on OUYA).
+static void UT99AndroidWaitForQueueSpacePerfA()
+{
+	const Uint32 Target = (Uint32)(BufferSize * 2);
+	const INT BytesPerFrame = ((AudioFormat & AUDIO_STEREO) ? 2 : 1) * (INT)sizeof(SWORD);
+	const INT BytesPerMs = Max( 1, (AudioRate * BytesPerFrame) / 1000 );
+	for( ;; )
+	{
+		const Uint32 Queued = SDL_GetQueuedAudioSize( AndroidAudioDevice );
+		if( Queued <= Target )
+			break;
+		AudioSleep( Clamp( (INT)((Queued - Target) / (Uint32)BytesPerMs), 1, 15 ) );
+	}
+}
+
 static INT NextPowerOfTwo( INT Value )
 {
 	INT Result = 1;
@@ -182,8 +200,7 @@ void PlayAudio()
 	}
 	else
 	{
-		while( SDL_GetQueuedAudioSize( AndroidAudioDevice ) > (Uint32)(BufferSize * 2) )
-			AudioSleep( 1 );
+		UT99AndroidWaitForQueueSpacePerfA();
 	}
 
 	if( SDL_QueueAudio( AndroidAudioDevice, AudioBuffer, BufferSize ) != 0 )
@@ -495,8 +512,7 @@ INT AudioWait()
 #if defined(__ANDROID__)
 	if( AndroidAudioDevice && AudioInitialized )
 	{
-		while( SDL_GetQueuedAudioSize( AndroidAudioDevice ) > (Uint32)(BufferSize * 2) )
-			AudioSleep( 1 );
+		UT99AndroidWaitForQueueSpacePerfA();
 		return 1;
 	}
 	return 0;

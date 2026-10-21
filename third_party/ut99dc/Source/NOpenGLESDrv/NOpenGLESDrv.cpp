@@ -132,6 +132,23 @@ static UBOOL UT99AndroidReadWidescreenFOVConfigV159( UBOOL DefaultValue )
 	}
 	return DefaultValue;
 }
+
+// UT99_ANDROID_PERF_A_TEXTURE_FILTER:
+// Trilinear filtering doubles the texture fetches of every minified world
+// texture, which is a large share of the fill budget on Tegra 3 era GPUs
+// (OUYA). Pre-Lollipop devices default to bilinear mip filtering; the INI key
+// [NOpenGLESDrv.NOpenGLESRenderDevice] UseTrilinear=True/False overrides it.
+static UBOOL GUT99AndroidTrilinearPerfA = 1;
+
+static UBOOL UT99AndroidReadTrilinearConfigPerfA()
+{
+	TCHAR Value[64];
+	UBOOL ParsedValue = 1;
+	if( GConfig && GConfig->GetString(TEXT("NOpenGLESDrv.NOpenGLESRenderDevice"), TEXT("UseTrilinear"), Value, ARRAY_COUNT(Value))
+	 && UT99AndroidParseBoolTextV159( Value, ParsedValue ) )
+		return ParsedValue;
+	return SDL_GetAndroidSDKVersion() >= 21 ? 1 : 0;
+}
 #endif
 
 #ifdef PLATFORM_ANDROID
@@ -365,6 +382,10 @@ UBOOL UNOpenGLESRenderDevice::Init( UViewport* InViewport, INT NewX, INT NewY, I
 
 	WidescreenFOV = UT99AndroidReadWidescreenFOVConfigV159( WidescreenFOV );
 	UT99_ANDROID_GLES_LOGI_V28("UT99_ANDROID_V159_WIDESCREEN_FOV_INIT config=%d", WidescreenFOV ? 1 : 0);
+#ifdef PLATFORM_ANDROID
+	GUT99AndroidTrilinearPerfA = UT99AndroidReadTrilinearConfigPerfA();
+	UT99_ANDROID_GLES_LOGI_V28("UT99_ANDROID_PERF_A_TEXTURE_FILTER trilinear=%d sdk=%d", GUT99AndroidTrilinearPerfA ? 1 : 0, SDL_GetAndroidSDKVersion());
+#endif
 	debugf( NAME_Log, "UT99_ANDROID_V159_WIDESCREEN_FOV_INIT config=%d", WidescreenFOV ? 1 : 0 );
 
 	if( UseBGRA )
@@ -1326,7 +1347,12 @@ void UNOpenGLESRenderDevice::UpdateTextureFilter( const FTextureInfo& Info, DWOR
 	}
 	else
 	{
-		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ( Info.NumMips > 1 ) ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR );
+#ifdef PLATFORM_ANDROID
+		const GLint MipFilter = GUT99AndroidTrilinearPerfA ? GL_LINEAR_MIPMAP_LINEAR : GL_LINEAR_MIPMAP_NEAREST;
+#else
+		const GLint MipFilter = GL_LINEAR_MIPMAP_LINEAR;
+#endif
+		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, ( Info.NumMips > 1 ) ? MipFilter : GL_LINEAR );
 		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR );
 	}
 
