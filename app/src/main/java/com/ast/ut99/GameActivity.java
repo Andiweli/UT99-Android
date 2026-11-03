@@ -1186,6 +1186,122 @@ public class GameActivity extends SDLActivity {
         return reason > 0;
     }
 
+    boolean ut99RetroTouchHasController() {
+        // UT99_ANDROID_V231_FINGERPRINT_NOT_CONTROLLER:
+        // RetroTouchControllers.isControllerConnected() accepts every device that
+        // claims GAMEPAD or JOYSTICK. Phone fingerprint sensors (uinput-fpc,
+        // uinput-goodix, ...) often declare gamepad button codes, so Android
+        // reports them as GAMEPAD and the touch controls never appeared.
+        try {
+            int[] ids = android.view.InputDevice.getDeviceIds();
+            for (int id : ids) {
+                android.view.InputDevice device = android.view.InputDevice.getDevice(id);
+                if (ut99IsRealControllerDeviceV231(device)) {
+                    return ut99ControllerResultV231(device);
+                }
+                ut99LogIgnoredControllerV231(device);
+            }
+            return ut99ControllerResultV231(null);
+        } catch (Throwable t) {
+            // A real controller event still suppresses RetroTouch immediately
+            // through onHardwareControllerInput().
+            Log.w(TAG, "controller inventory unavailable", t);
+            return false;
+        }
+    }
+
+    private static boolean ut99IsRealControllerEventV231(android.view.InputEvent event) {
+        android.view.InputDevice device = event.getDevice();
+        // Injected events carry no device; keep treating those as controller input.
+        return device == null || ut99IsRealControllerDeviceV231(device);
+    }
+
+    private static boolean ut99IsRealControllerDeviceV231(android.view.InputDevice device) {
+        if (device == null || device.isVirtual()) return false;
+        final int sources = device.getSources();
+        final boolean gamepad = (sources & android.view.InputDevice.SOURCE_GAMEPAD)
+                == android.view.InputDevice.SOURCE_GAMEPAD;
+        final boolean joystick = (sources & android.view.InputDevice.SOURCE_JOYSTICK)
+                == android.view.InputDevice.SOURCE_JOYSTICK;
+        if (!gamepad && !joystick) return false;
+        if (ut99IsNonControllerSensorV231(device)) return false;
+        // Analog sticks or a hat D-pad: fingerprint and key sensors have neither.
+        if (joystick
+                && (device.getMotionRange(android.view.MotionEvent.AXIS_X,
+                        android.view.InputDevice.SOURCE_JOYSTICK) != null
+                || device.getMotionRange(android.view.MotionEvent.AXIS_HAT_X,
+                        android.view.InputDevice.SOURCE_JOYSTICK) != null)) {
+            return true;
+        }
+        // Button-only pads must map both A and B. Android flags a sensor as
+        // GAMEPAD as soon as it declares any single gamepad key code.
+        if (!gamepad) return false;
+        if (android.os.Build.VERSION.SDK_INT < 19) return true;
+        try {
+            return Ut99Api19InputDevice.hasFaceButtons(device);
+        } catch (Throwable ignored) {
+            return true;
+        }
+    }
+
+    private static boolean ut99IsNonControllerSensorV231(android.view.InputDevice device) {
+        String name = device.getName();
+        if (name == null) return false;
+        String n = name.toLowerCase(java.util.Locale.US);
+        return n.contains("fingerprint")
+                || n.contains("fpc")
+                || n.contains("goodix")
+                || n.contains("gf3208")
+                || n.contains("silead")
+                || n.contains("chipone")
+                || n.contains("cdfinger")
+                || n.contains("sunwave")
+                || n.contains("egistec")
+                || n.contains("qbt")
+                || n.contains("fpsensor")
+                || n.contains("fp_key")
+                || n.contains("fp-key")
+                || n.contains("uinput-fp")
+                || n.contains("uinput-elan")
+                || n.contains("uinput-focal")
+                || n.contains("uinput-egis");
+    }
+
+    private String ut99V231LastControllerName;
+    private boolean ut99V231ControllerLogged;
+    private final java.util.HashSet<String> ut99V231IgnoredLogged = new java.util.HashSet<String>();
+
+    private void ut99LogIgnoredControllerV231(android.view.InputDevice device) {
+        if (device == null) return;
+        final int sources = device.getSources();
+        if ((sources & android.view.InputDevice.SOURCE_GAMEPAD) != android.view.InputDevice.SOURCE_GAMEPAD
+                && (sources & android.view.InputDevice.SOURCE_JOYSTICK) != android.view.InputDevice.SOURCE_JOYSTICK) {
+            return;
+        }
+        String name = String.valueOf(device.getName());
+        if (!ut99V231IgnoredLogged.add(name)) return;
+        Log.i(TAG, "UT99_ANDROID_V231_FINGERPRINT_NOT_CONTROLLER ignored name=" + name
+                + " id=" + device.getId()
+                + " sources=0x" + Integer.toHexString(sources)
+                + " virtual=" + device.isVirtual());
+    }
+
+    private boolean ut99ControllerResultV231(android.view.InputDevice device) {
+        String name = device != null ? device.getName() : null;
+        if (!ut99V231ControllerLogged
+                || (name == null ? ut99V231LastControllerName != null
+                        : !name.equals(ut99V231LastControllerName))) {
+            ut99V231ControllerLogged = true;
+            ut99V231LastControllerName = name;
+            Log.i(TAG, "UT99_ANDROID_V231_FINGERPRINT_NOT_CONTROLLER present=" + (device != null)
+                    + (device != null
+                    ? " name=" + name + " id=" + device.getId()
+                    + " sources=0x" + Integer.toHexString(device.getSources())
+                    : ""));
+        }
+        return device != null;
+    }
+
     int ut99RetroTouchInputResetSerial() {
         try {
             return nativeAndroidInputResetSerialRT();
@@ -1323,6 +1439,16 @@ public class GameActivity extends SDLActivity {
         }
     }
 
+    @android.annotation.TargetApi(19)
+    private static final class Ut99Api19InputDevice {
+        private Ut99Api19InputDevice() {}
+        static boolean hasFaceButtons(android.view.InputDevice device) {
+            boolean[] keys = device.hasKeys(android.view.KeyEvent.KEYCODE_BUTTON_A,
+                    android.view.KeyEvent.KEYCODE_BUTTON_B);
+            return keys[0] && keys[1];
+        }
+    }
+
     @android.annotation.TargetApi(29)
     private static final class Ut99Api29InputDevice {
         private Ut99Api29InputDevice() {}
@@ -1388,7 +1514,8 @@ public class GameActivity extends SDLActivity {
             android.util.Log.i("UT99Android", "UT99_ANDROID_V72_ACTIVE GameActivity single START toggle path loaded");
         }
         if (isAndroidGamepadSourceV47(event) || isOuyaMenuKeyV79(keyCode) || textDeleteKey) {
-            if (ut99RetroTouchBridge != null && isAndroidGamepadSourceV47(event)) {
+            if (ut99RetroTouchBridge != null && isAndroidGamepadSourceV47(event)
+                    && ut99IsRealControllerEventV231(event)) {
                 ut99RetroTouchBridge.onHardwareControllerInput();
             }
             if (action == android.view.KeyEvent.ACTION_DOWN || action == android.view.KeyEvent.ACTION_UP) {
@@ -1502,7 +1629,7 @@ public class GameActivity extends SDLActivity {
     @Override
     public boolean onGenericMotionEvent(android.view.MotionEvent event) {
         if (isAndroidGamepadSourceV47(event) && event.getAction() == android.view.MotionEvent.ACTION_MOVE) {
-            if (ut99RetroTouchBridge != null) {
+            if (ut99RetroTouchBridge != null && ut99IsRealControllerEventV231(event)) {
                 ut99RetroTouchBridge.onHardwareControllerInput();
             }
             final boolean ouya = isOuyaDeviceV108();
@@ -2033,7 +2160,7 @@ public class GameActivity extends SDLActivity {
             ut99V91MigrateLegacyTouchOverlayForRetroTouch();
             ut99RetroTouchBridge = new Ut99RetroTouchBridge(this);
             ut99RetroTouchBridge.attach();
-            Log.i(TAG, "RetroTouch 1.0.0-beta.4 installed over SDL gameplay view");
+            Log.i(TAG, "RetroTouch 1.0.0-beta.9 installed over SDL gameplay view");
         } catch (Throwable t) {
             Log.e(TAG, "RetroTouch Beta 4 install failed", t);
         }

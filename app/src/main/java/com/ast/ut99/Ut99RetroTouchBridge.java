@@ -8,7 +8,6 @@ import android.widget.FrameLayout;
 
 import com.ast.retrotouch.RetroTouchAdapter;
 import com.ast.retrotouch.RetroTouchControl;
-import com.ast.retrotouch.RetroTouchControllers;
 import com.ast.retrotouch.RetroTouchLayout;
 import com.ast.retrotouch.RetroTouchMode;
 import com.ast.retrotouch.RetroTouchNavigation;
@@ -139,18 +138,18 @@ final class Ut99RetroTouchBridge {
 
         // UT99 owns controller-presence suppression explicitly. Do not combine it
         // with RetroTouch's temporary "hide after controller input" feature.
-        // RetroTouchControllers.isControllerConnected() is polled below so the
-        // overlay disappears while a GAMEPAD/JOYSTICK exists and returns after
+        // host.ut99RetroTouchHasController() is polled below so the overlay
+        // disappears while a real controller exists and returns after
         // disconnect/disable without restarting the Activity.
         view.setAutoHideOnController(false);
-        cachedControllerConnected = RetroTouchControllers.isControllerConnected();
+        cachedControllerConnected = host.ut99RetroTouchHasController();
         cachedDesktopInput = host.ut99RetroTouchHasDesktopInput();
         lastControllerReadMs = android.os.SystemClock.uptimeMillis();
         lastDesktopInputReadMs = lastControllerReadMs;
         view.setOverlayEnabled(true);
         view.setMode(RetroTouchMode.OFF);
         // RETROTOUCH_OFF_VIEW_PASSTHROUGH_V215:
-        // OFF in the Beta 4 AAR does not change View visibility. Keep the
+        // OFF in the Beta 4 to Beta 9 AAR does not change View visibility. Keep the
         // full-screen focusable overlay out of Android hit-testing/focus until
         // controls are actually needed.
         view.setVisibility(android.view.View.GONE);
@@ -168,7 +167,7 @@ final class Ut99RetroTouchBridge {
         host.addContentView(view, fill);
         view.bringToFront();
         start();
-        Log.i(TAG, "RetroTouch 1.0.0-beta.4 bridge attached with OFF/NAVIGATION/GAMEPLAY state machine");
+        Log.i(TAG, "RetroTouch 1.0.0-beta.9 bridge attached with OFF/NAVIGATION/GAMEPLAY state machine");
     }
 
     void start() {
@@ -377,7 +376,7 @@ final class Ut99RetroTouchBridge {
         boolean controllerChanged = false;
         if (forceLog || now - lastControllerReadMs >= CONTROLLER_POLL_MS) {
             lastControllerReadMs = now;
-            boolean connected = RetroTouchControllers.isControllerConnected();
+            boolean connected = host.ut99RetroTouchHasController();
             controllerChanged = connected != cachedControllerConnected;
             cachedControllerConnected = connected;
         }
