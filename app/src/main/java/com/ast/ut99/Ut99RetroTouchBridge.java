@@ -7,6 +7,7 @@ import android.view.MotionEvent;
 import android.widget.FrameLayout;
 
 import com.ast.retrotouch.RetroTouchAdapter;
+import com.ast.retrotouch.RetroTouchButtonShape;
 import com.ast.retrotouch.RetroTouchControl;
 import com.ast.retrotouch.RetroTouchLayout;
 import com.ast.retrotouch.RetroTouchMode;
@@ -91,6 +92,7 @@ final class Ut99RetroTouchBridge {
         this.view = new RetroTouchView(host);
 
         registerActions();
+        applyButtonShapes();
         view.setGameplayLayout(buildGameplayLayout());
         view.setNavigationLayout(buildNavigationLayout());
         view.setListener(new RetroTouchAdapter() {
@@ -253,6 +255,16 @@ final class Ut99RetroTouchBridge {
         view.registerAction(ACTION_MENU, "Menu");
         view.registerAction(ACTION_MENU_OK, "OK");
         view.registerAction(ACTION_MENU_BACK, "Back");
+    }
+
+    private void applyButtonShapes() {
+        // RetroTouch beta.9 picks button shapes from the label (L1, R2, START, ...).
+        // UT99 labels name the action instead, so map each button to the
+        // controller button it mirrors: triggers and shoulders, Start = Menu.
+        view.setButtonShape(ACTION_FIRE, RetroTouchButtonShape.SHOULDER);
+        view.setButtonShape(ACTION_ALT_FIRE, RetroTouchButtonShape.SHOULDER);
+        view.setButtonShape(ACTION_NEXT_WEAPON, RetroTouchButtonShape.SHOULDER);
+        view.setButtonShape(ACTION_MENU, RetroTouchButtonShape.RECTANGLE);
     }
 
     private RetroTouchLayout buildGameplayLayout() {
