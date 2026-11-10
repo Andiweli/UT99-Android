@@ -75,6 +75,7 @@ UBOOL NEQ(FPlane& A,FPlane& B,UPackageMap* Map) {return
 UBOOL NEQ(FString A,FString B,UPackageMap* Map) {return A!=B;}
 
 #if defined(__ANDROID__) || defined(PLATFORM_ANDROID)
+#include <android/log.h>
 // UT99_ANDROID_V232_LAN_DOREP_SAFE:
 // FindObjectChecked aborts the listen server as soon as the loaded Engine.u
 // lacks a property this native list names, and a property without CPF_Net has
@@ -85,7 +86,9 @@ static UProperty* UT99AndroidRepPropertyV232( UClass* Class, const TCHAR* Name )
 	UProperty* Property = FindObject<UProperty>( Class, Name );
 	if( Property && (Property->PropertyFlags & CPF_Net) )
 		return Property;
-	debugf( NAME_Warning, TEXT("UT99_ANDROID_V232_LAN_DOREP_SAFE %s.%s is not replicated by the loaded package"), Class->GetName(), Name );
+	FString Text = FString::Printf( TEXT("UT99_ANDROID_V232_LAN_DOREP_SAFE %s.%s is not replicated by the loaded package"), Class->GetName(), Name );
+	debugf( NAME_Warning, TEXT("%s"), *Text );
+	__android_log_print( ANDROID_LOG_WARN, "UT99LAN", "%s", appToAnsi(*Text) );
 	return NULL;
 }
 #define DOREP(c,v) \
