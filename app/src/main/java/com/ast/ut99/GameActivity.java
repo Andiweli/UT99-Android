@@ -1025,6 +1025,7 @@ public class GameActivity extends SDLActivity {
     private static native void nativeAndroidAxisV47(int axis, float value);
     private static native void nativeAndroidTouchLookV101(float x, float y);
     private static native int nativeAndroidInputResetSerialRT();
+    private static native int nativeAndroidNetModeV232();
 
     // RetroTouch Beta 4 host bridge. Keep all game-specific mappings in Java and
     // feed the same native controller/touch path already used by UT99.
@@ -1809,6 +1810,7 @@ public class GameActivity extends SDLActivity {
         } catch (Throwable t) {
             Log.w(TAG, "RetroTouch pause cleanup failed", t);
         }
+        ut99V232StopLanWatch();
 
         if (isAutomotiveDevice()) {
             try {
@@ -1861,6 +1863,114 @@ public class GameActivity extends SDLActivity {
 
         ut99V52ScheduleImmersive(); // v52 onResume
         ut99V76HideImeUnlessRequested();
+        ut99V232StartLanWatch();
+    }
+
+    // UT99_ANDROID_V232_LAN_IP:
+    // While this device hosts or joins a network game, keep Wi-Fi out of power
+    // save (it otherwise adds 100-300 ms latency spikes) and show the host its
+    // LAN address for "Open Location" on the other device.
+    private static final long UT99_V232_LAN_POLL_MS = 1000L;
+    private android.os.Handler ut99V232LanHandler;
+    private android.net.wifi.WifiManager.WifiLock ut99V232WifiLock;
+    private int ut99V232LastNetMode = -1;
+    private final Runnable ut99V232LanPoll = new Runnable() {
+        @Override
+        public void run() {
+            ut99V232PollNetMode();
+            if (ut99V232LanHandler != null) {
+                ut99V232LanHandler.postDelayed(this, UT99_V232_LAN_POLL_MS);
+            }
+        }
+    };
+
+    private void ut99V232StartLanWatch() {
+        if (ut99V232LanHandler == null) {
+            ut99V232LanHandler = new android.os.Handler(android.os.Looper.getMainLooper());
+        }
+        ut99V232LanHandler.removeCallbacks(ut99V232LanPoll);
+        ut99V232LanHandler.postDelayed(ut99V232LanPoll, UT99_V232_LAN_POLL_MS);
+    }
+
+    private void ut99V232StopLanWatch() {
+        if (ut99V232LanHandler != null) {
+            ut99V232LanHandler.removeCallbacks(ut99V232LanPoll);
+        }
+        ut99V232SetWifiLock(false);
+        ut99V232LastNetMode = -1;
+    }
+
+    private void ut99V232PollNetMode() {
+        final int netMode;
+        try {
+            netMode = nativeAndroidNetModeV232();
+        } catch (Throwable t) {
+            return;
+        }
+        if (netMode == ut99V232LastNetMode) return;
+        ut99V232LastNetMode = netMode;
+
+        // ELevelNetMode: 2 = listen server, 3 = client.
+        final boolean networked = netMode == 2 || netMode == 3;
+        ut99V232SetWifiLock(networked);
+        final String addresses = ut99V232LanAddresses();
+        Log.i(TAG, "UT99_ANDROID_V232_LAN_IP netMode=" + netMode
+                + " wifiLock=" + networked + " lan=" + addresses);
+        if (netMode == 2) {
+            Toast.makeText(this, addresses.length() > 0
+                    ? "LAN server running. On the other device use Open Location: " + addresses
+                    : "LAN server running, but this device has no Wi-Fi address.",
+                    Toast.LENGTH_LONG).show();
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void ut99V232SetWifiLock(boolean held) {
+        try {
+            if (held) {
+                if (ut99V232WifiLock == null) {
+                    android.net.wifi.WifiManager wifi = (android.net.wifi.WifiManager)
+                            getApplicationContext().getSystemService(android.content.Context.WIFI_SERVICE);
+                    if (wifi == null) return;
+                    ut99V232WifiLock = wifi.createWifiLock(android.os.Build.VERSION.SDK_INT >= 29
+                            ? android.net.wifi.WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+                            : android.net.wifi.WifiManager.WIFI_MODE_FULL_HIGH_PERF, "UT99:LanGame");
+                    ut99V232WifiLock.setReferenceCounted(false);
+                }
+                if (!ut99V232WifiLock.isHeld()) ut99V232WifiLock.acquire();
+            } else if (ut99V232WifiLock != null && ut99V232WifiLock.isHeld()) {
+                ut99V232WifiLock.release();
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "UT99_ANDROID_V232_LAN_IP wifi lock failed", t);
+        }
+    }
+
+    private static String ut99V232LanAddresses() {
+        StringBuilder sb = new StringBuilder();
+        try {
+            java.util.Enumeration<java.net.NetworkInterface> ifs = java.net.NetworkInterface.getNetworkInterfaces();
+            while (ifs != null && ifs.hasMoreElements()) {
+                java.net.NetworkInterface nif = ifs.nextElement();
+                String name = String.valueOf(nif.getName()).toLowerCase(java.util.Locale.US);
+                // Mobile data interfaces carry carrier-private 10.x addresses nobody on the LAN can reach.
+                if (!nif.isUp() || nif.isLoopback() || name.startsWith("rmnet") || name.startsWith("ccmni")
+                        || name.startsWith("pdp") || name.startsWith("clat") || name.startsWith("v4-")) {
+                    continue;
+                }
+                java.util.Enumeration<java.net.InetAddress> addrs = nif.getInetAddresses();
+                while (addrs.hasMoreElements()) {
+                    java.net.InetAddress addr = addrs.nextElement();
+                    if (addr instanceof java.net.Inet4Address && addr.isSiteLocalAddress()) {
+                        if (sb.length() > 0) sb.append(", ");
+                        sb.append(addr.getHostAddress());
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+            // No address shown; the game itself is unaffected.
+        }
+        return sb.toString();
     }
 
 

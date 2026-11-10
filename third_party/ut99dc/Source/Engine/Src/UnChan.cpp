@@ -945,10 +945,23 @@ void UActorChannel::ReplicateActor()
 		AndroidChanLogV115( TEXT("UT99_ANDROID_V115_CHAN ReplicateActor skipped invalid channel state") );
 		return;
 	}
-	// UT99_ANDROID_V117_CHAN_ZONE_SAFE:
-	// ZoneInfo native replication is not required for the first Android LAN proof-of-life
-	// and has repeatedly exposed class/property-layout mismatches during direct join.
-	if( Actor->IsA(AZoneInfo::StaticClass()) )
+	// UT99_ANDROID_V232_LAN_ZONE_REPLICATION:
+	// V117 skipped every ZoneInfo, and with it LevelInfo (pause, TimeDilation),
+	// because direct joins aborted. The native replication list now skips
+	// properties the loaded Engine.u does not replicate (UT99_ANDROID_V232_LAN_DOREP_SAFE),
+	// so zones replicate again. [UT99Android] SkipZoneReplication=True in
+	// AndroidUT99.ini brings the old skip back if a device still fails.
+	static INT GAndroidSkipZoneReplicationV232 = -1;
+	if( GAndroidSkipZoneReplicationV232 < 0 )
+	{
+		UBOOL bSkip = 0;
+		GConfig->GetBool( TEXT("UT99Android"), TEXT("SkipZoneReplication"), bSkip );
+		GAndroidSkipZoneReplicationV232 = bSkip ? 1 : 0;
+		AndroidChanLogV115( bSkip
+			? TEXT("UT99_ANDROID_V232_LAN zone replication off (SkipZoneReplication=True)")
+			: TEXT("UT99_ANDROID_V232_LAN zone replication on") );
+	}
+	if( GAndroidSkipZoneReplicationV232 && Actor->IsA(AZoneInfo::StaticClass()) )
 	{
 		static INT GAndroidZoneSkipLogCount = 0;
 		if( GAndroidZoneSkipLogCount++ < 4 )

@@ -74,6 +74,33 @@ UBOOL NEQ(FPlane& A,FPlane& B,UPackageMap* Map) {return
 ((INT*)&A)[2]!=((INT*)&B)[2] || ((INT*)&A)[3]!=((INT*)&B)[3];}
 UBOOL NEQ(FString A,FString B,UPackageMap* Map) {return A!=B;}
 
+#if defined(__ANDROID__) || defined(PLATFORM_ANDROID)
+// UT99_ANDROID_V232_LAN_DOREP_SAFE:
+// FindObjectChecked aborts the listen server as soon as the loaded Engine.u
+// lacks a property this native list names, and a property without CPF_Net has
+// no valid RepIndex. Skip such a property instead and log it once. This is what
+// made V117 drop ZoneInfo/LevelInfo replication altogether.
+static UProperty* UT99AndroidRepPropertyV232( UClass* Class, const TCHAR* Name )
+{
+	UProperty* Property = FindObject<UProperty>( Class, Name );
+	if( Property && (Property->PropertyFlags & CPF_Net) )
+		return Property;
+	debugf( NAME_Warning, TEXT("UT99_ANDROID_V232_LAN_DOREP_SAFE %s.%s is not replicated by the loaded package"), Class->GetName(), Name );
+	return NULL;
+}
+#define DOREP(c,v) \
+	{ \
+		static UProperty* sp##v = UT99AndroidRepPropertyV232(A##c::StaticClass(),TEXT(#v)); \
+		if( sp##v && NEQ(v,((A##c*)Recent)->v,Map) ) \
+			*Ptr++ = sp##v->RepIndex; \
+	}
+#define DOREPARRAY(c,v) \
+	static UProperty* sp##v = UT99AndroidRepPropertyV232(A##c::StaticClass(),TEXT(#v)); \
+	if( sp##v ) \
+		for( INT i=0; i<ARRAY_COUNT(v); i++ ) \
+			if( NEQ(v[i],((A##c*)Recent)->v[i],Map) ) \
+				*Ptr++ = sp##v->RepIndex+i;
+#else
 #define DOREP(c,v) \
 	if( NEQ(v,((A##c*)Recent)->v,Map) ) \
 	{ \
@@ -85,6 +112,7 @@ UBOOL NEQ(FString A,FString B,UPackageMap* Map) {return A!=B;}
 	for( INT i=0; i<ARRAY_COUNT(v); i++ ) \
 		if( NEQ(v[i],((A##c*)Recent)->v[i],Map) ) \
 			*Ptr++ = sp##v->RepIndex+i;
+#endif
 
 INT* AActor::GetOptimizedRepList( BYTE* Recent, FPropertyRetirement* Retire, INT* Ptr, UPackageMap* Map )
 {
@@ -279,11 +307,17 @@ INT* APlayerPawn::GetOptimizedRepList( BYTE* Recent, FPropertyRetirement* Retire
 				{
 					FRotator TempTargetViewRotation = TargetViewRotation;
 					FRotator TempRecentTargetViewRotation = ((APlayerPawn*)Recent)->TargetViewRotation;
+#if defined(__ANDROID__) || defined(PLATFORM_ANDROID)
+					static UProperty* spTargetViewRotation = UT99AndroidRepPropertyV232(APlayerPawn::StaticClass(),TEXT("TargetViewRotation"));
+					if( spTargetViewRotation && NEQ(TempTargetViewRotation,TempRecentTargetViewRotation,Map) )
+						*Ptr++ = spTargetViewRotation->RepIndex;
+#else
 					if( NEQ(TempTargetViewRotation,TempRecentTargetViewRotation,Map) )
 					{
 						static UProperty* spTargetViewRotation = FindObjectChecked<UProperty>(APlayerPawn::StaticClass(),TEXT("TargetViewRotation"));
 						*Ptr++ = spTargetViewRotation->RepIndex;
 					}
+#endif
 				}
 				DOREP(PlayerPawn,TargetEyeHeight);
 				DOREP(PlayerPawn,TargetWeaponViewOffset);

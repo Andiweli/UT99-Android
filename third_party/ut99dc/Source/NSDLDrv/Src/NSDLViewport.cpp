@@ -1724,6 +1724,9 @@ static void UT99V82QueueTextBytes( const char* Text )
 static UBOOL GUT99AndroidMenuVisibleV91 = 0; // UT99_ANDROID_V91_TOUCH_OVERLAY
 static volatile INT GUT99RetroTouchInputResetSerial = 0; // RETROTOUCH_BETA4_INPUT_RESET_SYNC
 static volatile INT GUT99RetroTouchUiState = 0; // RETROTOUCH_BETA4_STATE_MACHINE_V2: 0 pass-through, 1 navigation, 2 gameplay
+// UT99_ANDROID_V232_LAN_IP: ELevelNetMode of the local player's level, polled by
+// GameActivity to keep Wi-Fi out of power save and to show the host's IP.
+static volatile INT GUT99AndroidNetModeV232 = 0;
 
 static INT UT99RetroTouchDetermineUiState( UNSDLViewport* Viewport, UBOOL bMenu )
 {
@@ -1755,6 +1758,7 @@ static void UT99V47TickInput( UNSDLViewport* Viewport, UBOOL bMenu )
     static UBOOL V72LoggedActive = 0;
     if( !Viewport )
         return;
+    GUT99AndroidNetModeV232 = ( Viewport->Actor && Viewport->Actor->Level ) ? (INT)Viewport->Actor->Level->NetMode : 0;
     if( !V72LoggedActive )
     {
         V72LoggedActive = 1;
@@ -1984,6 +1988,7 @@ extern "C" JNIEXPORT jboolean JNICALL Java_com_ast_ut99_GameActivity_nativeAndro
 extern "C" JNIEXPORT jboolean JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidIsMenuV92(JNIEnv*, jclass) { return GUT99AndroidMenuVisibleV91 ? JNI_TRUE : JNI_FALSE; } // UT99_ANDROID_V92_TOUCH_OVERLAY
 extern "C" JNIEXPORT jint JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidTouchUiStateRT(JNIEnv*, jclass) { return (jint)GUT99RetroTouchUiState; } // RETROTOUCH_BETA4_STATE_MACHINE_V2
 extern "C" JNIEXPORT jint JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidInputResetSerialRT(JNIEnv*, jclass) { return (jint)GUT99RetroTouchInputResetSerial; } // RETROTOUCH_BETA4_INPUT_RESET_SYNC
+extern "C" JNIEXPORT jint JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidNetModeV232(JNIEnv*, jclass) { return (jint)GUT99AndroidNetModeV232; } // UT99_ANDROID_V232_LAN_IP
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidAxisV47(JNIEnv*, jclass, jint axis, jfloat value) { UT99V47SetAndroidAxis((INT)axis, (FLOAT)value); }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidTouchLookV101(JNIEnv*, jclass, jfloat x, jfloat y)
 {
