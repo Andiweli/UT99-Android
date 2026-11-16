@@ -829,7 +829,14 @@ INT ULevel::ServerTickClient( UNetConnection* Connection, FLOAT DeltaSeconds )
 					CullCount++;
 					Actor->NetTag                 = NetTag;
 					PriorityList  [ConsiderCount] = FActorPriority( ViewPos, ViewDir, Connection, Actor );
-					PriorityActors[ConsiderCount] = PriorityList + ConsiderCount++;
+					// UT99_ANDROID_V232_LAN_PRIORITY_ORDER_FIX:
+					// "PriorityActors[ConsiderCount] = PriorityList + ConsiderCount++;"
+					// relied on MSVC's left-to-right order. C++17 evaluates the right
+					// side of '=' first, so entry 0 stayed uninitialised GMem and every
+					// entry landed one slot too far. Sort() then dereferenced garbage
+					// and the listen server crashed as soon as a client joined.
+					PriorityActors[ConsiderCount] = PriorityList + ConsiderCount;
+					ConsiderCount++;
 				}
 				LastTime += 0.023;
 				ThisTime += 0.023;
