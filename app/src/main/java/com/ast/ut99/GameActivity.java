@@ -1105,7 +1105,7 @@ public class GameActivity extends SDLActivity {
                                 == android.view.InputDevice.SOURCE_GAMEPAD
                                 || (sources & android.view.InputDevice.SOURCE_JOYSTICK)
                                 == android.view.InputDevice.SOURCE_JOYSTICK;
-                if (controllerClass) continue;
+                if (controllerClass && !ut99IsKeyboardNotControllerV232(device)) continue;
 
                 final boolean alphabeticKeyboard =
                         device.getKeyboardType() == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC
@@ -1237,6 +1237,7 @@ public class GameActivity extends SDLActivity {
         // Button-only pads must map both A and B. Android flags a sensor as
         // GAMEPAD as soon as it declares any single gamepad key code.
         if (!gamepad) return false;
+        if (ut99IsKeyboardNotControllerV232(device)) return false;
         if (android.os.Build.VERSION.SDK_INT < 19) return true;
         try {
             return Ut99Api19InputDevice.hasFaceButtons(device);
@@ -1341,10 +1342,11 @@ public class GameActivity extends SDLActivity {
                             == android.view.InputDevice.SOURCE_GAMEPAD
                             || (sources & android.view.InputDevice.SOURCE_JOYSTICK)
                             == android.view.InputDevice.SOURCE_JOYSTICK;
+            final boolean keyboardNotController = ut99IsKeyboardNotControllerV232(device);
             final boolean desktopKeyboardDevice = chromeOS
                     || android.os.Build.VERSION.SDK_INT < 29
                     || ut99IsExternalInputDeviceV211(device);
-            return !controllerClass && desktopKeyboardDevice
+            return (!controllerClass || keyboardNotController) && desktopKeyboardDevice
                     && device.getKeyboardType() == android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC
                     && (event.getSource() & android.view.InputDevice.SOURCE_KEYBOARD)
                     == android.view.InputDevice.SOURCE_KEYBOARD;
@@ -1464,6 +1466,47 @@ public class GameActivity extends SDLActivity {
                 || keyCode == android.view.KeyEvent.KEYCODE_BUTTON_MODE;
     }
 
+    // UT99_ANDROID_V232_BT_KEYBOARD:
+    // Many Bluetooth keyboards declare consumer/media HID usages that Android
+    // maps to D-pad and gamepad key codes, so the whole keyboard is reported as
+    // KEYBOARD|DPAD|GAMEPAD. The gamepad path then swallowed every letter, ESC
+    // and Enter in the intro and in game. Wired keyboards are usually plain
+    // KEYBOARD, which is why they worked. A real controller has stick or hat
+    // axes; an alphabetic keyboard without them stays on the keyboard path.
+    private static boolean ut99IsKeyboardNotControllerV232(android.view.InputDevice device) {
+        if (device == null) return false;
+        try {
+            if (device.getKeyboardType() != android.view.InputDevice.KEYBOARD_TYPE_ALPHABETIC) return false;
+            if ((device.getSources() & android.view.InputDevice.SOURCE_KEYBOARD)
+                    != android.view.InputDevice.SOURCE_KEYBOARD) return false;
+            return device.getMotionRange(android.view.MotionEvent.AXIS_X,
+                    android.view.InputDevice.SOURCE_JOYSTICK) == null
+                    && device.getMotionRange(android.view.MotionEvent.AXIS_HAT_X,
+                    android.view.InputDevice.SOURCE_JOYSTICK) == null;
+        } catch (Throwable ignored) {
+            return false;
+        }
+    }
+
+    private static boolean ut99IsDpadKeyCodeV232(int keyCode) {
+        return keyCode == android.view.KeyEvent.KEYCODE_DPAD_UP
+                || keyCode == android.view.KeyEvent.KEYCODE_DPAD_DOWN
+                || keyCode == android.view.KeyEvent.KEYCODE_DPAD_LEFT
+                || keyCode == android.view.KeyEvent.KEYCODE_DPAD_RIGHT
+                || keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER;
+    }
+
+    private final java.util.HashSet<Integer> ut99V232KeyboardLogged = new java.util.HashSet<Integer>();
+
+    private void ut99LogKeyboardWithGamepadSourceV232(android.view.KeyEvent event) {
+        android.view.InputDevice device = event.getDevice();
+        if (device == null || !ut99V232KeyboardLogged.add(device.getId())) return;
+        Log.i(TAG, "UT99_ANDROID_V232_BT_KEYBOARD keyboard with gamepad sources kept as keyboard name="
+                + device.getName() + " id=" + device.getId()
+                + " sources=0x" + Integer.toHexString(device.getSources())
+                + " eventSource=0x" + Integer.toHexString(event.getSource()));
+    }
+
     // UT99_ANDROID_PERF_A_INPUT_TRACE:
     // Per-key/per-axis logcat lines build strings on every input event (Dalvik
     // GC churn on OUYA). Set to true only while debugging input routing.
@@ -1504,6 +1547,28 @@ public class GameActivity extends SDLActivity {
         final int action = event.getAction();
         final int keyCode = event.getKeyCode();
         final boolean physicalKeyboard = isPhysicalKeyboardEventV210(event);
+        // UT99_ANDROID_V232_BT_KEYBOARD: see ut99IsKeyboardNotControllerV232().
+        final boolean keyboardKey = !android.view.KeyEvent.isGamepadButton(keyCode)
+                && ut99IsKeyboardNotControllerV232(event.getDevice());
+        if (keyboardKey && isAndroidGamepadSourceV47(event)) {
+            ut99LogKeyboardWithGamepadSourceV232(event);
+            if (ut99RetroTouchBridge != null) {
+                ut99RetroTouchBridge.onHardwareDesktopInput();
+            }
+            // SDL would hand arrow/center keys of a device with D-pad sources to
+            // its joystick code instead of the keyboard. Send them as keys.
+            if (ut99IsDpadKeyCodeV232(keyCode)
+                    && (action == android.view.KeyEvent.ACTION_DOWN
+                    || action == android.view.KeyEvent.ACTION_UP)) {
+                if (action == android.view.KeyEvent.ACTION_DOWN) {
+                    SDLActivity.onNativeKeyDown(keyCode);
+                } else {
+                    SDLActivity.onNativeKeyUp(keyCode);
+                }
+                return true;
+            }
+            return super.dispatchKeyEvent(event);
+        }
         boolean textDeleteKey = !physicalKeyboard
                 && (keyCode == android.view.KeyEvent.KEYCODE_DEL
                 || keyCode == android.view.KeyEvent.KEYCODE_FORWARD_DEL);
