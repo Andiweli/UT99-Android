@@ -1992,8 +1992,10 @@ extern "C" JNIEXPORT jint JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidNe
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidAxisV47(JNIEnv*, jclass, jint axis, jfloat value) { UT99V47SetAndroidAxis((INT)axis, (FLOAT)value); }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidTouchLookV101(JNIEnv*, jclass, jfloat x, jfloat y)
 {
-    GUT99V101TouchLookX = Clamp(GUT99V101TouchLookX + (FLOAT)x, -2.0f, 2.0f);
-    GUT99V101TouchLookY = Clamp(GUT99V101TouchLookY + (FLOAT)y, -2.0f, 2.0f);
+    // UT99_ANDROID_V233_TOUCH_LOOK_FPS: no +-2 cap per tick, so fast swipes keep
+    // their full rotation. The bound only guards against invalid values.
+    GUT99V101TouchLookX = Clamp(GUT99V101TouchLookX + (FLOAT)x, -400.0f, 400.0f);
+    GUT99V101TouchLookY = Clamp(GUT99V101TouchLookY + (FLOAT)y, -400.0f, 400.0f);
 }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99_GameActivity_nativeAndroidTextV82(JNIEnv* Env, jclass, jstring Text)
 {
@@ -2011,15 +2013,19 @@ extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99dc_GameActivity_nativeAndroid
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99dc_GameActivity_nativeAndroidAxisV47(JNIEnv*, jclass, jint axis, jfloat value) { UT99V47SetAndroidAxis((INT)axis, (FLOAT)value); }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_ut99dc_GameActivity_nativeAndroidTouchLookV101(JNIEnv*, jclass, jfloat x, jfloat y)
 {
-    GUT99V101TouchLookX = Clamp(GUT99V101TouchLookX + (FLOAT)x, -2.0f, 2.0f);
-    GUT99V101TouchLookY = Clamp(GUT99V101TouchLookY + (FLOAT)y, -2.0f, 2.0f);
+    // UT99_ANDROID_V233_TOUCH_LOOK_FPS: no +-2 cap per tick, so fast swipes keep
+    // their full rotation. The bound only guards against invalid values.
+    GUT99V101TouchLookX = Clamp(GUT99V101TouchLookX + (FLOAT)x, -400.0f, 400.0f);
+    GUT99V101TouchLookY = Clamp(GUT99V101TouchLookY + (FLOAT)y, -400.0f, 400.0f);
 }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_unreal_GameActivity_nativeAndroidButtonV47(JNIEnv*, jclass, jint keyCode, jboolean down) { UT99V47SetAndroidButton((INT)keyCode, down ? 1 : 0); }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_unreal_GameActivity_nativeAndroidAxisV47(JNIEnv*, jclass, jint axis, jfloat value) { UT99V47SetAndroidAxis((INT)axis, (FLOAT)value); }
 extern "C" JNIEXPORT void JNICALL Java_com_ast_unreal_GameActivity_nativeAndroidTouchLookV101(JNIEnv*, jclass, jfloat x, jfloat y)
 {
-    GUT99V101TouchLookX = Clamp(GUT99V101TouchLookX + (FLOAT)x, -2.0f, 2.0f);
-    GUT99V101TouchLookY = Clamp(GUT99V101TouchLookY + (FLOAT)y, -2.0f, 2.0f);
+    // UT99_ANDROID_V233_TOUCH_LOOK_FPS: no +-2 cap per tick, so fast swipes keep
+    // their full rotation. The bound only guards against invalid values.
+    GUT99V101TouchLookX = Clamp(GUT99V101TouchLookX + (FLOAT)x, -400.0f, 400.0f);
+    GUT99V101TouchLookY = Clamp(GUT99V101TouchLookY + (FLOAT)y, -400.0f, 400.0f);
 }
 #endif
 #endif /* UT99_ANDROID_NATIVE_INPUT_V47_END_V47B */

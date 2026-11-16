@@ -2335,7 +2335,7 @@ public class GameActivity extends SDLActivity {
             ut99V91MigrateLegacyTouchOverlayForRetroTouch();
             ut99RetroTouchBridge = new Ut99RetroTouchBridge(this);
             ut99RetroTouchBridge.attach();
-            Log.i(TAG, "RetroTouch 1.0.0-beta.9 installed over SDL gameplay view");
+            Log.i(TAG, "RetroTouch 1.0.0-beta.12 installed over SDL gameplay view");
         } catch (Throwable t) {
             Log.e(TAG, "RetroTouch Beta 4 install failed", t);
         }

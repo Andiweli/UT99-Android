@@ -117,11 +117,15 @@ final class Ut99RetroTouchBridge {
                 if (editing || appliedMode != RetroTouchMode.GAMEPLAY) {
                     return;
                 }
-                // RetroTouch reports look delta normalized by the shorter view edge.
-                // Convert it back to the proven v107/v103 UT99 relative-look gain.
-                float minEdge = Math.max(1.0f, Math.min(view.getWidth(), view.getHeight()));
-                float x = clamp(deltaX * minEdge * 0.0210f, -1.0f, 1.0f);
-                float y = clamp(deltaY * minEdge * 0.0210f, -1.0f, 1.0f);
+                // UT99_ANDROID_V233_TOUCH_LOOK_FPS:
+                // RetroTouch reports the swipe delta normalized by the shorter view
+                // edge. The old path converted it to pixels * 0.021 and clamped every
+                // event to +-1, and native clamped each tick to +-2, so fast swipes
+                // lost most of their movement and a full swipe across the LOOK area
+                // turned only about 90 degrees. Keep the normalized delta (same feel
+                // on every screen size) and only drop clearly invalid jumps.
+                float x = clamp(deltaX * LOOK_GAIN, -LOOK_EVENT_LIMIT, LOOK_EVENT_LIMIT);
+                float y = clamp(deltaY * LOOK_GAIN, -LOOK_EVENT_LIMIT, LOOK_EVENT_LIMIT);
                 host.ut99RetroTouchLook(x, y);
             }
 
@@ -169,7 +173,7 @@ final class Ut99RetroTouchBridge {
         host.addContentView(view, fill);
         view.bringToFront();
         start();
-        Log.i(TAG, "RetroTouch 1.0.0-beta.9 bridge attached with OFF/NAVIGATION/GAMEPLAY state machine");
+        Log.i(TAG, "RetroTouch 1.0.0-beta.12 bridge attached with OFF/NAVIGATION/GAMEPLAY state machine");
     }
 
     void start() {
@@ -258,7 +262,7 @@ final class Ut99RetroTouchBridge {
     }
 
     private void applyButtonShapes() {
-        // RetroTouch beta.9 picks button shapes from the label (L1, R2, START, ...).
+        // RetroTouch picks button shapes from the label (L1, R2, START, ...).
         // UT99 labels name the action instead, so map each button to the
         // controller button it mirrors: triggers and shoulders, Start = Menu.
         view.setButtonShape(ACTION_FIRE, RetroTouchButtonShape.SHOULDER);
@@ -533,6 +537,12 @@ final class Ut99RetroTouchBridge {
             }
         }
     }
+
+    // One swipe across one short screen edge turns about 210 degrees at the
+    // default UT99 Mouse Sensitivity (3.0); the in-game slider still scales it.
+    private static final float LOOK_GAIN = 48.0f;
+    // A single touch event never moves more than one full screen edge.
+    private static final float LOOK_EVENT_LIMIT = LOOK_GAIN;
 
     private static float clamp(float value, float min, float max) {
         return value < min ? min : (value > max ? max : value);
