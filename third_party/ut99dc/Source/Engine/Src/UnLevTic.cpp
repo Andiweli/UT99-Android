@@ -847,6 +847,15 @@ INT ULevel::ServerTickClient( UNetConnection* Connection, FLOAT DeltaSeconds )
 		unguard;
 
 		guard(SortConsiderList);
+#if defined(__ANDROID__) || defined(PLATFORM_ANDROID)
+		static UBOOL GAndroidPriorityFixLogged = 0;
+		if( !GAndroidPriorityFixLogged )
+		{
+			GAndroidPriorityFixLogged = 1;
+			debugf( NAME_Log, TEXT("UT99_ANDROID_V232_LAN_PRIORITY_ORDER_FIX active considered=%i"), ConsiderCount );
+			__android_log_print( ANDROID_LOG_INFO, "UT99LAN", "UT99_ANDROID_V232_LAN_PRIORITY_ORDER_FIX active considered=%d", (int)ConsiderCount );
+		}
+#endif
 		Sort( PriorityActors, ConsiderCount );
 		unguard;
 
