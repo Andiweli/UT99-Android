@@ -21,6 +21,144 @@ Revision history:
 #endif
 
 #ifdef PLATFORM_ANDROID
+#include <signal.h>
+#include <dlfcn.h>
+#include <fcntl.h>
+#include <unistd.h>
+#include <string.h>
+#include <stdio.h>
+#include <unwind.h>
+#include <ucontext.h>
+
+// UT99_ANDROID_V233_CRASH_REPORT:
+// Users rarely can capture logcat. On a native crash, write the signal, the
+// faulting address and a symbolized backtrace to System/UT99Crash.log and to
+// logcat, then hand the signal back to Android so the normal crash handling
+// (tombstone, "app stopped" dialog) still happens.
+static char GUT99CrashPathV233[1100] = "";
+static struct sigaction GUT99OldActionsV233[32];
+static char GUT99AltStackV233[64 * 1024];
+
+static void UT99CrashWriteV233( int Fd, const char* Text )
+{
+	if( Text )
+	{
+		__android_log_write( ANDROID_LOG_FATAL, "UT99Crash", Text );
+		if( Fd >= 0 )
+		{
+			ssize_t Ignored = write( Fd, Text, strlen(Text) );
+			Ignored = write( Fd, "\n", 1 );
+			(void)Ignored;
+		}
+	}
+}
+
+static void UT99CrashFrameV233( int Fd, int Index, uintptr_t Pc )
+{
+	char Line[512];
+	Dl_info Info;
+	memset( &Info, 0, sizeof(Info) );
+	if( Pc && dladdr( (void*)Pc, &Info ) && Info.dli_fname )
+	{
+		const char* Lib = strrchr( Info.dli_fname, '/' );
+		Lib = Lib ? Lib + 1 : Info.dli_fname;
+		snprintf( Line, sizeof(Line), "  #%02d pc %08lx  %s (%s+%lu)", Index,
+			(unsigned long)(Pc - (uintptr_t)Info.dli_fbase), Lib,
+			Info.dli_sname ? Info.dli_sname : "?",
+			(unsigned long)(Info.dli_saddr ? Pc - (uintptr_t)Info.dli_saddr : 0) );
+	}
+	else
+	{
+		snprintf( Line, sizeof(Line), "  #%02d pc %p", Index, (void*)Pc );
+	}
+	UT99CrashWriteV233( Fd, Line );
+}
+
+struct FUT99UnwindStateV233
+{
+	int Fd;
+	int Count;
+};
+
+static _Unwind_Reason_Code UT99CrashUnwindV233( struct _Unwind_Context* Context, void* Arg )
+{
+	FUT99UnwindStateV233* State = (FUT99UnwindStateV233*)Arg;
+	uintptr_t Pc = (uintptr_t)_Unwind_GetIP( Context );
+	if( Pc )
+		UT99CrashFrameV233( State->Fd, State->Count++, Pc );
+	return State->Count < 40 ? _URC_NO_REASON : _URC_END_OF_STACK;
+}
+
+static void UT99CrashHandlerV233( int Signal, siginfo_t* Info, void* UContext )
+{
+	int Fd = GUT99CrashPathV233[0] ? open( GUT99CrashPathV233, O_WRONLY|O_CREAT|O_TRUNC, 0644 ) : -1;
+	char Line[512];
+	snprintf( Line, sizeof(Line), "UT99_ANDROID_V233_CRASH signal %d code %d fault addr %p",
+		Signal, Info ? Info->si_code : 0, Info ? Info->si_addr : NULL );
+	UT99CrashWriteV233( Fd, Line );
+
+	uintptr_t Pc = 0, Lr = 0;
+	if( UContext )
+	{
+		ucontext_t* Uc = (ucontext_t*)UContext;
+#if defined(__aarch64__)
+		Pc = (uintptr_t)Uc->uc_mcontext.pc;
+		Lr = (uintptr_t)Uc->uc_mcontext.regs[30];
+#elif defined(__arm__)
+		Pc = (uintptr_t)Uc->uc_mcontext.arm_pc;
+		Lr = (uintptr_t)Uc->uc_mcontext.arm_lr;
+#elif defined(__x86_64__)
+		Pc = (uintptr_t)Uc->uc_mcontext.gregs[REG_RIP];
+#elif defined(__i386__)
+		Pc = (uintptr_t)Uc->uc_mcontext.gregs[REG_EIP];
+#endif
+	}
+	UT99CrashWriteV233( Fd, "crash site:" );
+	UT99CrashFrameV233( Fd, 0, Pc );
+	if( Lr )
+		UT99CrashFrameV233( Fd, 1, Lr );
+	UT99CrashWriteV233( Fd, "backtrace:" );
+	FUT99UnwindStateV233 State = { Fd, 0 };
+	_Unwind_Backtrace( UT99CrashUnwindV233, &State );
+	if( Fd >= 0 )
+	{
+		fsync( Fd );
+		close( Fd );
+	}
+
+	// Restore the previous handler and re-raise for Android's own crash dump.
+	if( Signal > 0 && Signal < 32 )
+		sigaction( Signal, &GUT99OldActionsV233[Signal], NULL );
+	raise( Signal );
+}
+
+static void UT99InstallCrashReportV233()
+{
+	const char* Base = appBaseDir();
+	if( Base && strlen(Base) < sizeof(GUT99CrashPathV233) - 20 )
+	{
+		strcpy( GUT99CrashPathV233, Base );
+		strcat( GUT99CrashPathV233, "UT99Crash.log" );
+	}
+	stack_t Stack;
+	memset( &Stack, 0, sizeof(Stack) );
+	Stack.ss_sp = GUT99AltStackV233;
+	Stack.ss_size = sizeof(GUT99AltStackV233);
+	sigaltstack( &Stack, NULL );
+
+	const int Signals[] = { SIGSEGV, SIGBUS, SIGFPE, SIGILL, SIGABRT };
+	for( unsigned i = 0; i < sizeof(Signals)/sizeof(Signals[0]); i++ )
+	{
+		struct sigaction Action;
+		memset( &Action, 0, sizeof(Action) );
+		Action.sa_sigaction = UT99CrashHandlerV233;
+		Action.sa_flags = SA_SIGINFO | SA_ONSTACK;
+		sigemptyset( &Action.sa_mask );
+		sigaction( Signals[i], &Action, &GUT99OldActionsV233[Signals[i]] );
+	}
+	UT99_ANDROID_LOGI("UT99_ANDROID_V233_CRASH_REPORT installed path=%s", GUT99CrashPathV233);
+}
+
 // UT99_ANDROID_V65_AUDIO_LINK_FIX:
 // Audio is now linked from CMake (whole-archive Audio target).  Do not reference
 // package internals here; if the Audio target is not linked, hard externs make
@@ -415,6 +553,7 @@ int main( int argc, char* argv[] )
 	appInit( TEXT("UnrealTournament"), CmdLine, &Malloc, &Log, &Error, &Warn, &FileManager, FConfigCacheIni::Factory, 1 );
 	UT99_ANDROID_LOGI("after appInit");
 #ifdef PLATFORM_ANDROID
+	UT99InstallCrashReportV233();
 	ForceLinkAndroidAudioPackage();
 #endif
 

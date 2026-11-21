@@ -79,6 +79,11 @@ public:
 					WriteRaw( Data );
 					WriteRaw( LINE_TERMINATOR );
 #endif
+#if defined(__ANDROID__) || defined(PLATFORM_ANDROID)
+					// UT99_ANDROID_V233_LOG_FLUSH: the file writer keeps a 4 KB buffer, so a
+					// native crash lost exactly the last lines before it. Flush every line.
+					LogAr->Flush();
+#endif
 				}
 				if( GLogHook )
 					GLogHook->Serialize( Data, Event );
