@@ -125,11 +125,14 @@ public:
 	// Name subsystem accessors.
 	static const TCHAR* SafeString( EName Index )
 	{
-		return Initialized ? Names(Index)->Name : TEXT("Uninitialized");
+		return (Initialized && (INT)Index < Names.Num() && Names(Index)) ? Names(Index)->Name : TEXT("Uninitialized");
 	}
 	static UBOOL SafeSuppressed( EName Index )
 	{
-		return Initialized && (Names(Index)->Flags & 0x00001000);
+		// UT99_ANDROID_V233_EXIT_LOG_GUARD: appError -> exit() runs static
+		// destructors; the static Names table can be destroyed before the log
+		// file device, whose destructor still logs. Names.Num() is then 0.
+		return Initialized && (INT)Index < Names.Num() && Names(Index) && (Names(Index)->Flags & 0x00001000);
 	}
 	static int GetMaxNames()
 	{

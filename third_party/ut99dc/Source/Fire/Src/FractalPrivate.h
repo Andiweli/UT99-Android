@@ -484,8 +484,12 @@ class DLL_EXPORT_CLASS UIceTexture : public UFractalTexture
     BYTE        VertPanSpeed;
 	BYTE        Frequency;
 	BYTE        Amplitude;
-	BITFIELD    MoveIce:1;   // Mirrored as BOOLEAN in C++
-	FLOAT       MasterCount;
+	// UT99_ANDROID_V233_ICETEXTURE_LAYOUT: clang/GCC pack a 1-bit field into
+	// the unused bytes after Amplitude, MSVC and UnrealScript start a new DWORD.
+	// Without GCC_PACK every later member sat 4 bytes too low (C++=364,
+	// script=368) and maps with an IceTexture (e.g. DOM-MetalDream) aborted.
+	BITFIELD    MoveIce:1 GCC_PACK(4);   // Mirrored as BOOLEAN in C++
+	FLOAT       MasterCount GCC_PACK(4);
 	FLOAT       UDisplace;
 	FLOAT 		VDisplace;
 	FLOAT       UPosition;
